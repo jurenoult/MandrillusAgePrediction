@@ -1,5 +1,5 @@
 pipeline:
-  _target_: mandrill.pipelines.basic_regression.BasicRegressionPipeline
+  _target_: mandrillage.pipelines.basic_regression.BasicRegressionPipeline
 
 name: "BasicRegressionOneYear"
 train: True

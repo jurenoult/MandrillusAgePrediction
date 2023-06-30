@@ -6,11 +6,11 @@ import numpy as np
 
 from tqdm import tqdm
 
-from mandrill.utils import split_dataset, save, load
-from mandrill.dataset import read_dataset, MandrillImageDataset
-from mandrill.models import RegressionModel, VGGFace
-from mandrill.pipeline import Pipeline
-from mandrill.evaluations import standard_regression_evaluation
+from mandrillage.utils import split_dataset, save, load
+from mandrillage.dataset import read_dataset, MandrillImageDataset
+from mandrillage.models import RegressionModel, VGGFace
+from mandrillage.pipeline import Pipeline
+from mandrillage.evaluations import standard_regression_evaluation
 from torch.utils.data import DataLoader
 
 class BasicRegressionPipeline(Pipeline):

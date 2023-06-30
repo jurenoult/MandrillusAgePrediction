@@ -1,0 +1,17 @@
+Bootstrap: docker
+From: pytorch/pytorch:2.0.1-cuda11.7-cudnn8-devel
+Stage: build
+
+%environment
+    MANDRILLAGE_SRC=/mandrillage
+
+%files
+    config /mandrillage/config
+    mandrillage /mandrillage/mandrill
+    notebooks /mandrillage/notebooks
+    requirements.txt /mandrillage/requirements.txt
+    setup.py /mandrillage/setup.py
+
+%post
+    cd /mandrillage
+    pip install -r requirements.txt
