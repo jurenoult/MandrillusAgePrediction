@@ -1,9 +1,6 @@
 import numpy as np
 import math as mt
-import sys
 from sklearn.cluster import KMeans
-from sklearn import datasets
-from sklearn import metrics
 
 class XMeans:
     def loglikelihood(self, r, rn, var, m, k):

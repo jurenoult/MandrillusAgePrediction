@@ -1,0 +1,9 @@
+hydra-core
+torch
+numpy
+tqdm
+pandas
+opencv-python
+albumentations
+matplotlib
+seaborn

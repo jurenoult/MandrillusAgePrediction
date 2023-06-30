@@ -1,8 +1,19 @@
-from torch.utils.data import DataLoader, random_split
+import logging
 import os
-import torch
-from .dataset import AugmentedDataset
+
 import numpy as np
+import torch
+from torch.utils.data import DataLoader, random_split
+
+from .dataset import AugmentedDataset
+
+
+def get_logger(name=__name__) -> logging.Logger:
+    logger = logging.getLogger(name)
+    return logger
+
+
+log = get_logger(__name__)
 
 def split_dataset(dataset, train_ratio, batch_size, augment=True, num_workers=0):
     # Split the dataset into training and validation subsets

@@ -1,0 +1,21 @@
+pipeline:
+  _target_: mandrill.pipelines.basic_regression.BasicRegressionPipeline
+name: BasicRegressionOneYear
+train: true
+test: true
+resume: true
+dataset:
+  basepath: data/db1/
+  metadata: MFD_metadatas.csv
+  images: Images
+  max_age: 1
+  dob_certain_only: true
+  in_memory: true
+  train_ratio: 0.8
+training:
+  learning_rate: 0.0001
+  batch_size: 4
+  epochs: 100
+model:
+  regression_lin_start: 2048
+  regression_stages: 6
