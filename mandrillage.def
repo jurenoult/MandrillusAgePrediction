@@ -13,5 +13,6 @@ Stage: build
     setup.py /mandrillage/setup.py
 
 %post
+    apt-get install libglib2.0-0
     cd /mandrillage
     pip install -r requirements.txt
