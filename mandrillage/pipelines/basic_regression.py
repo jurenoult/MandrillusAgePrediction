@@ -1,21 +1,27 @@
-import os
+import json
+import logging
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import numpy as np
-
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from mandrillage.utils import split_dataset, save, load
-from mandrillage.dataset import read_dataset, MandrillImageDataset
+from mandrillage.dataset import MandrillImageDataset, read_dataset
+from mandrillage.evaluations import standard_regression_evaluation
 from mandrillage.models import RegressionModel, VGGFace
 from mandrillage.pipeline import Pipeline
-from mandrillage.evaluations import standard_regression_evaluation
-from torch.utils.data import DataLoader
-
-import logging
+from mandrillage.utils import load, save, split_dataset
 
 log = logging.getLogger(__name__)
+
+
+class NumpyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return json.JSONEncoder.default(self, obj)
 
 
 class BasicRegressionPipeline(Pipeline):
@@ -139,7 +145,7 @@ class BasicRegressionPipeline(Pipeline):
         with open("scores.json", "w") as file:
             import json
 
-            file.write(json.dumps(results))
+            file.write(json.dumps(results), cls=NumpyEncoder)
 
         return results[self.name][self.name + "_regression"][
             self.name + "_regression_mae"
