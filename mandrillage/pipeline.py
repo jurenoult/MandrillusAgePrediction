@@ -1,5 +1,6 @@
 import logging
 import torch
+import os
 import matplotlib.pyplot as plt
 from omegaconf import OmegaConf
 from tqdm import tqdm
@@ -17,7 +18,25 @@ class Pipeline(object):
         self.init_parameters()
 
     def init_parameters(self):
-        raise ValueError("You must subclass self.init_parameters() method")
+        self.name = self.config.name
+        self.max_age = self.config.dataset.max_age
+        self.max_days = 365 * self.max_age
+        self.dataset_metadata_path = os.path.join(
+            self.config.dataset.basepath, self.config.dataset.metadata
+        )
+        self.dataset_images_path = os.path.join(
+            self.config.dataset.basepath, self.config.dataset.images
+        )
+
+        self.learning_rate = self.config.training.learning_rate
+        self.batch_size = self.config.training.batch_size
+        self.epochs = self.config.training.epochs
+        self.train_ratio = self.config.dataset.train_ratio
+        self.in_mem = self.config.dataset.in_memory
+        self.resume = self.config.resume
+
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        log.info("Using device:", self.device)
 
     def init_datamodule(self):
         raise ValueError("You must subclass self.init_datamodule() method")
@@ -57,10 +76,15 @@ class Pipeline(object):
 
     def train_step(self, loader, optimizer, model, criterion, device):
         x, y = next(iter(loader))
+        if isinstance(x, list):
+            for i in range(len(x)):
+                x[i] = x[i].to(device)
+        else:
+            x = x.to(device)
         optimizer.zero_grad()
 
         # Forward pass
-        x, y = x.to(device), y.to(device)
+        y = y.to(device)
         y_hat = model(x)
         loss = criterion(y_hat, y)
 
@@ -68,7 +92,10 @@ class Pipeline(object):
         loss.backward()
         optimizer.step()
 
-        size = x.size(0)
+        if isinstance(x, list):
+            size = x[0].size(0)
+        else:
+            size = x.size(0)
 
         return loss.item() * size
 

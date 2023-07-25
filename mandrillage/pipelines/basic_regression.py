@@ -13,6 +13,10 @@ from mandrillage.pipeline import Pipeline
 from mandrillage.evaluations import standard_regression_evaluation
 from torch.utils.data import DataLoader
 
+import logging
+
+log = logging.getLogger(__name__)
+
 
 class BasicRegressionPipeline(Pipeline):
     def __init__(self):
@@ -107,14 +111,14 @@ class BasicRegressionPipeline(Pipeline):
             val_loss /= len(self.val_dataset)
 
             if val_loss < best_val:
-                print(f"Val loss improved from {best_val:.4f} to {val_loss:.4f}")
+                log.info(f"Val loss improved from {best_val:.4f} to {val_loss:.4f}")
                 best_val = val_loss
                 save(self.model, "regression", exp_name=self.name)
             else:
-                print(f"Val loss did not improved from {best_val:.4f}")
+                log.info(f"Val loss did not improved from {best_val:.4f}")
 
             # Print training and validation metrics
-            print(
+            log.info(
                 f"Epoch [{epoch+1}/{self.epochs}] - "
                 f"Train Loss: {train_loss:.5f} - "
                 f"Val Loss: {val_loss:.5f}"
@@ -122,9 +126,9 @@ class BasicRegressionPipeline(Pipeline):
 
     def test(self, max_display=0):
         self.model = load(self.model, "regression", exp_name=self.name)
-        self.val_loader = DataLoader(
-            self.val_single_dataset, batch_size=1, shuffle=False
-        )
+        self.model.eval()
+
+        self.val_loader = DataLoader(self.val_dataset, batch_size=1, shuffle=False)
         y_true, y_pred = self.collect(
             self.val_loader, self.model, self.device, max_display=max_display
         )
@@ -136,25 +140,7 @@ class BasicRegressionPipeline(Pipeline):
         ]
 
     def init_parameters(self):
-        self.name = self.config.name
-        self.max_age = self.config.dataset.max_age
-        self.max_days = 365 * self.max_age
-        self.dataset_metadata_path = os.path.join(
-            self.config.dataset.basepath, self.config.dataset.metadata
-        )
-        self.dataset_images_path = os.path.join(
-            self.config.dataset.basepath, self.config.dataset.images
-        )
-
-        self.learning_rate = self.config.training.learning_rate
-        self.batch_size = self.config.training.batch_size
-        self.epochs = self.config.training.epochs
-        self.train_ratio = self.config.dataset.train_ratio
-        self.in_mem = self.config.dataset.in_memory
-        self.resume = self.config.resume
+        super().init_parameters()
 
         self.regression_lin_start = self.config.model.regression_lin_start
         self.regression_stages = self.config.model.regression_stages
-
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        print("Using device:", self.device)

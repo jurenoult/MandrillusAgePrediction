@@ -1,0 +1,28 @@
+pipeline:
+  _target_: mandrillage.pipelines.basic_regression.BasicRegressionPipeline
+
+name: "RegressionOneYear"
+train: True
+test: True
+resume: True
+
+dataset:
+  basepath: "data/db1/"
+  metadata: "MFD_metadatas.csv"
+  images: "Images"
+  max_age: 1
+  dob_certain_only: True
+  in_memory: True
+  train_ratio: 0.8
+
+training:
+  learning_rate: 0.0001
+  batch_size: 16
+  epochs: 100
+
+model:
+  # Number of dense neurons at first layer
+  regression_lin_start: 2048
+  # Number of stages in the regression head.
+  # Each stage divides the number of neurons by two
+  regression_stages: 6
