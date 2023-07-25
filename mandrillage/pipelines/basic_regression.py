@@ -13,7 +13,13 @@ from mandrillage.dataset import MandrillImageDataset, read_dataset
 from mandrillage.evaluations import standard_regression_evaluation
 from mandrillage.models import RegressionModel, VGGFace
 from mandrillage.pipeline import Pipeline
-from mandrillage.utils import load, save, split_dataset
+from mandrillage.utils import (
+    load,
+    save,
+    split_dataset,
+    create_kfold_dataset,
+    create_loader,
+)
 
 log = logging.getLogger(__name__)
 
@@ -43,14 +49,30 @@ class BasicRegressionPipeline(Pipeline):
             max_days=self.max_days,
         )
 
-        (
-            self.train_loader,
-            self.val_loader,
-            self.train_dataset,
-            self.val_dataset,
-        ) = split_dataset(
-            self.dataset, self.train_ratio, self.batch_size, augment=False
-        )
+        if self.kfold == 0:
+            (
+                self.train_loader,
+                self.val_loader,
+                self.train_dataset,
+                self.val_dataset,
+            ) = split_dataset(
+                self.dataset, self.train_ratio, self.batch_size, augment=False
+            )
+        else:
+            # Get indices
+            self.train_indices, self.val_indices = create_kfold_dataset(
+                self.dataset, self.kfold, self.train_index
+            )
+
+            # Create datasets and dataloader based on indices
+            (
+                self.train_loader,
+                self.val_loader,
+                self.train_dataset,
+                self.val_dataset,
+            ) = create_loader(
+                self.dataset, self.train_indices, self.val_indices, self.batch_size
+            )
 
     def init_logging(self):
         pass
@@ -143,7 +165,7 @@ class BasicRegressionPipeline(Pipeline):
             np.array(y_true), np.array(y_pred), self.name, 0, self.max_days
         )
 
-        scores_path = os.path.join(self.output_dir, "scores.json")
+        scores_path = os.path.join(self.output_dir, f"scores_{self.train_index}.json")
         with open(scores_path, "w") as file:
             import json
 

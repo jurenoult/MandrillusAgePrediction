@@ -1,7 +1,9 @@
 import logging
-import torch
 import os
+
 import matplotlib.pyplot as plt
+import numpy as np
+import torch
 from omegaconf import OmegaConf
 from tqdm import tqdm
 
@@ -11,6 +13,7 @@ log = logging.getLogger(__name__)
 class Pipeline(object):
     def __init__(self) -> None:
         torch.manual_seed(0)
+        self.train_index = 0
 
     def set_config(self, config, output_dir):
         OmegaConf.resolve(config)
@@ -35,6 +38,8 @@ class Pipeline(object):
         self.train_ratio = self.config.dataset.train_ratio
         self.in_mem = self.config.dataset.in_memory
         self.resume = self.config.resume
+
+        self.kfold = self.config.kfold
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         log.info("Using device:", self.device.type)
@@ -138,7 +143,6 @@ class Pipeline(object):
 
     def init(self):
         self.init_logging()
-        self.init_datamodule()
         self.init_model()
         self.init_losses()
         self.init_optimizers()
@@ -155,7 +159,17 @@ class Pipeline(object):
         test_score = None
 
         if self.config.train:
-            training_score = self.train()
+            if self.kfold > 1:
+                training_scores = []
+                for i in range(self.kfold):
+                    self.train_index = i
+                    self.init_datamodule()
+                    training_score = self.train()
+                    training_scores.append(training_score)
+                training_score = np.mean(training_scores)
+            else:
+                self.init_datamodule()
+                training_score = self.train()
         if self.config.test:
             test_score = self.test()
 
