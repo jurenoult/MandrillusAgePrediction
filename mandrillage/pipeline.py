@@ -183,8 +183,6 @@ class Pipeline(object):
             test_scores = np.mean(test_scores)
         else:
             if self.config.train:
-                training_score = self.train()
-            else:
                 self.init_datamodule()
                 training_score = self.train()
             if self.config.test:
