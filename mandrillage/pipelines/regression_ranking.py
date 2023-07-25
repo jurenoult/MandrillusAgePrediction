@@ -54,7 +54,7 @@ class RegressionRankingPipeline(BasicRegressionPipeline):
         self.ranking_model = self.ranking_model.to(self.device)
 
     def init_losses(self):
-        super().init_model()
+        super().init_losses()
         self.ranking_criterion = nn.CrossEntropyLoss()
 
     def init_optimizers(self):
