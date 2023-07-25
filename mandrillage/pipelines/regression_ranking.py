@@ -58,6 +58,7 @@ class RegressionRankingPipeline(BasicRegressionPipeline):
         self.ranking_criterion = nn.CrossEntropyLoss()
 
     def init_optimizers(self):
+        super()._init_optimizers()
         self.ranking_optimizer = optim.Adam(
             self.ranking_model.parameters(), lr=self.ranking_learning_rate
         )
