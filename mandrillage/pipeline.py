@@ -87,7 +87,14 @@ class Pipeline(object):
         x, y = self.xy_to_device(x, y, device)
         y_hat = model(x)
         loss = criterion(y_hat, y)
-        return loss.item() * x.size(0)
+        return loss.item() * self.get_size(x)
+
+    def get_size(self, x):
+        if isinstance(x, list):
+            size = x[0].size(0)
+        else:
+            size = x.size(0)
+        return size
 
     def train_step(self, loader, optimizer, model, criterion, device):
         x, y = next(iter(loader))
@@ -103,10 +110,7 @@ class Pipeline(object):
         loss.backward()
         optimizer.step()
 
-        if isinstance(x, list):
-            size = x[0].size(0)
-        else:
-            size = x.size(0)
+        size = self.get_size(x)
 
         return loss.item() * size
 
