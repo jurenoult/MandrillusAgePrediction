@@ -139,7 +139,7 @@ class BasicRegressionPipeline(Pipeline):
         with open("scores.json", "w") as file:
             import json
 
-            file.write(json.dump(results))
+            file.write(json.dumps(results))
 
         return results[self.name][self.name + "_regression"][
             self.name + "_regression_mae"
