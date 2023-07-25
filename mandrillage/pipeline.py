@@ -12,9 +12,10 @@ class Pipeline(object):
     def __init__(self) -> None:
         torch.manual_seed(0)
 
-    def set_config(self, config):
+    def set_config(self, config, output_dir):
         OmegaConf.resolve(config)
         self.config = config
+        self.output_dir = output_dir
         self.init_parameters()
 
     def init_parameters(self):

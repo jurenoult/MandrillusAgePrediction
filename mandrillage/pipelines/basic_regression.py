@@ -1,3 +1,4 @@
+import os
 import json
 import logging
 
@@ -142,7 +143,8 @@ class BasicRegressionPipeline(Pipeline):
             np.array(y_true), np.array(y_pred), self.name, 0, self.max_days
         )
 
-        with open("scores.json", "w") as file:
+        scores_path = os.path.join(self.output_dir, "scores.json")
+        with open(scores_path, "w") as file:
             import json
 
             file.write(json.dumps(results, cls=NumpyEncoder))
