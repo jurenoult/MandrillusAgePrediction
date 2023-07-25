@@ -36,7 +36,7 @@ class RegressionRankingPipeline(BasicRegressionPipeline):
             self.ranking_train_dataset,
             self.ranking_val_dataset,
         ) = split_dataset(
-            self.ranking_dataset, self.train_ratio, self.batch_size, augment=False
+            ranking_dataset, self.train_ratio, self.batch_size, augment=False
         )
 
     def init_logging(self):
