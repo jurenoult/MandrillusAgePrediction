@@ -6,6 +6,8 @@ train: True
 test: True
 resume: True
 
+kfold: 0
+
 dataset:
   basepath: "data/db1/"
   metadata: "MFD_metadatas.csv"
