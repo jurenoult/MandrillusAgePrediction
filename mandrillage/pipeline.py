@@ -74,23 +74,28 @@ class Pipeline(object):
             total_val_loss += self.val_step(x, y, model, criterion, device)
         return total_val_loss
 
+    def xy_to_device(self, x, y, device):
+        if isinstance(x, list):
+            for i in range(len(x)):
+                x[i] = x[i].to(device)
+        else:
+            x = x.to(device)
+        y = y.to(device)
+        return x, y
+
     def val_step(self, x, y, model, criterion, device):
-        x, y = x.to(device), y.to(device)
+        x, y = self.xy_to_device(x, y, device)
         y_hat = model(x)
         loss = criterion(y_hat, y)
         return loss.item() * x.size(0)
 
     def train_step(self, loader, optimizer, model, criterion, device):
         x, y = next(iter(loader))
-        if isinstance(x, list):
-            for i in range(len(x)):
-                x[i] = x[i].to(device)
-        else:
-            x = x.to(device)
+        x, y = self.xy_to_device(x, y, device)
         optimizer.zero_grad()
 
         # Forward pass
-        y = y.to(device)
+
         y_hat = model(x)
         loss = criterion(y_hat, y)
 
