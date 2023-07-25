@@ -158,10 +158,10 @@ class Pipeline(object):
         if self.config.test:
             test_score = self.test()
 
-        score = training_score
+        self.score = training_score
         if self.config.test:
-            score = test_score
+            self.score = test_score
 
         log.info(f"Final score : {self.score}")
 
-        return score
+        return self.score
