@@ -158,20 +158,37 @@ class Pipeline(object):
         training_score = None
         test_score = None
 
-        if self.config.train:
-            if self.kfold > 1:
-                training_scores = []
-                for i in range(self.kfold):
-                    self.train_index = i
-                    self.init_datamodule()
-                    training_score = self.train()
-                    training_scores.append(training_score)
-                training_score = np.mean(training_scores)
+        if self.kfold > 1:
+            test_scores = []
+            for i in range(self.kfold):
+                self.train_index = i
+                # Set data for this k
+                self.init_datamodule()
+                # Train
+                training_score = self.train()
+                # Evaluate
+                test_score = self.test()
+                test_scores.append(test_score)
+
+            # Save cross val results
+            cross_val_scores_path = os.path.join(
+                self.output_dir, "cross_val_scores.json"
+            )
+            with open(cross_val_scores_path, "w") as f:
+                import json
+
+                f.write(json.dumps(cross_val_scores_path))
+
+            # Return mean score
+            test_scores = np.mean(test_scores)
+        else:
+            if self.config.train:
+                training_score = self.train()
             else:
                 self.init_datamodule()
                 training_score = self.train()
-        if self.config.test:
-            test_score = self.test()
+            if self.config.test:
+                test_score = self.test()
 
         self.score = training_score
         if self.config.test:

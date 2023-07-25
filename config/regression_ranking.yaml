@@ -1,12 +1,12 @@
 pipeline:
-  _target_: mandrillage.pipelines.basic_regression.BasicRegressionPipeline
+  _target_: mandrillage.pipelines.regression_ranking.RegressionRankingPipeline
 
 name: "BasicRegressionOneYear"
 train: True
 test: True
 resume: True
 
-kfold: 5
+kfold: 0
 
 dataset:
   basepath: "data/db1/"
@@ -19,7 +19,7 @@ dataset:
 
 training:
   learning_rate: 0.0001
-  batch_size: 16
+  batch_size: 32
   epochs: 100
   ranking_learning_rate: 0.0001
 
