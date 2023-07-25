@@ -19,6 +19,7 @@ training:
   learning_rate: 0.0001
   batch_size: 16
   epochs: 100
+  ranking_learning_rate: 0.0001
 
 model:
   # Number of dense neurons at first layer
@@ -26,3 +27,6 @@ model:
   # Number of stages in the regression head.
   # Each stage divides the number of neurons by two
   regression_stages: 6
+
+  classification_lin_start: 2048
+  classification_stages: 6

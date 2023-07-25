@@ -135,6 +135,12 @@ class BasicRegressionPipeline(Pipeline):
         results = standard_regression_evaluation(
             np.array(y_true), np.array(y_pred), self.name, 0, self.max_days
         )
+
+        with open("scores.json") as file:
+            import json
+
+            file.write(json.dump(results))
+
         return results[self.name][self.name + "_regression"][
             self.name + "_regression_mae"
         ]
