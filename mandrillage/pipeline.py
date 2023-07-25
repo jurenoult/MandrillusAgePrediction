@@ -36,7 +36,7 @@ class Pipeline(object):
         self.resume = self.config.resume
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        log.info("Using device:", self.device)
+        log.info("Using device:", self.device.type)
 
     def init_datamodule(self):
         raise ValueError("You must subclass self.init_datamodule() method")

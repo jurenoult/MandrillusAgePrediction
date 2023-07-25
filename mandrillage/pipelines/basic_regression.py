@@ -136,7 +136,7 @@ class BasicRegressionPipeline(Pipeline):
             np.array(y_true), np.array(y_pred), self.name, 0, self.max_days
         )
 
-        with open("scores.json") as file:
+        with open("scores.json", "w") as file:
             import json
 
             file.write(json.dump(results))
