@@ -13,6 +13,7 @@ Stage: build
     setup.py /mandrillage/setup.py
 
 %post
-    apt-get install libglib2.0-0
+    apt-get update -y
+    DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get -y install tzdata libglib2.0-0 libsm6 libxrender1 libfontconfig1
     cd /mandrillage
     pip install -r requirements.txt
