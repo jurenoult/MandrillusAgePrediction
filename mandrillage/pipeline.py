@@ -30,7 +30,7 @@ class Pipeline(object):
 
     def init_losses(self):
         raise ValueError("You must subclass self.init_losses() method")
-    
+
     def init_optimizers(self):
         raise ValueError("You must subclass self.init_optimizers() method")
 
@@ -45,9 +45,9 @@ class Pipeline(object):
 
     def val_loss(self, loader, model, criterion, device):
         total_val_loss = 0.0
-        for x, y in tqdm(loader):
+        for x, y in tqdm(loader, leave=True):
             total_val_loss += self.val_step(x, y, model, criterion, device)
-        return total_val_loss   
+        return total_val_loss
 
     def val_step(self, x, y, model, criterion, device):
         x, y = x.to(device), y.to(device)
@@ -67,7 +67,7 @@ class Pipeline(object):
         # Backward pass and optimization
         loss.backward()
         optimizer.step()
-        
+
         size = x.size(0)
 
         return loss.item() * size
@@ -81,28 +81,28 @@ class Pipeline(object):
             # Forward pass
             images = images.to(device)
             outputs = model(images)
-            
+
             # Convert the outputs to numpy arrays
             pred = outputs.squeeze().detach().cpu().numpy() * 365
             target = targets.squeeze().cpu().numpy() * 365
-            
+
             y_true.append(target)
             y_pred.append(pred)
-            
+
             if i >= max_display:
                 continue
-            
+
             # Display the results
             print("Predicted Values:", pred)
             print("Actual Values:", target)
             print("Prediction Error: ", pred - target)
             print()  # Add an empty line for separation
-            
+
             # Visualize the images and predictions
             plt.imshow(images.squeeze().cpu().permute(1, 2, 0))
             plt.title(f"Predicted: {pred}, Actual: {target}")
             plt.show()
-            
+
         return y_true, y_pred
 
     def test(self):
@@ -118,12 +118,14 @@ class Pipeline(object):
         self.init_loggers()
 
     def run(self):
-        assert self.config.train or self.config.test, "At least train or test must be true"
-        
+        assert (
+            self.config.train or self.config.test
+        ), "At least train or test must be true"
+
         self.init()
         training_score = None
         test_score = None
-        
+
         if self.config.train:
             training_score = self.train()
         if self.config.test:

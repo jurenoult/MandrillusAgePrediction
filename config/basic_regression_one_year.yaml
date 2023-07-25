@@ -17,7 +17,7 @@ dataset:
 
 training:
   learning_rate: 0.0001
-  batch_size: 2
+  batch_size: 16
   epochs: 100
 
 model:
