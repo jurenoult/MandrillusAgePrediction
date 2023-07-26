@@ -117,7 +117,7 @@ class RegressionRankingPipeline(BasicRegressionPipeline):
             self.ranking_model.eval()
             val_regression_loss = 0.0
             val_ranking_loss = 0.0
-            n_repeat = 10
+            n_repeat = 100
 
             with torch.no_grad():
                 val_regression_loss = self.val_loss(
