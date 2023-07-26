@@ -6,7 +6,7 @@ from tqdm import tqdm
 import cv2
 import torch
 import random
-from enum import Enum
+from enum import IntEnum
 
 from torch.utils.data import Dataset
 
@@ -246,9 +246,33 @@ class ClassificationMandrillImageDataset(MandrillImageDataset):
         return x, y
 
 
+<<<<<<< HEAD
 class MandrillDualClassificationDataset(MandrillImageDataset):
     def __init__(
         self, root_dir, dataframe, img_size=(224, 224), device="cuda", in_mem=False, max_days=0
+=======
+class RankingClass(IntEnum):
+    NONE = 0
+    SAME_MANDRILL_YOUNGER = 1
+    SAME_MANDRILL_SAME_AGE = 2
+    SAME_MANDRILL_OLDER = 3
+    DIFF_MANDRILL_YOUNGER = 4
+    DIFF_MANDRILL_SAME_AGE = 5
+    DIFF_MANDRILL_OLDER = 6
+
+
+class MandrillDualClassificationDataset(MandrillImageDataset):
+    def __init__(
+        self,
+        root_dir,
+        dataframe,
+        img_size=(224, 224),
+        device="cuda",
+        in_mem=False,
+        max_days=0,
+        same_age_gap=10,
+        n_classes=3,
+>>>>>>> b775df2 (fix: issue with random choice with enum and class integer with different mandrills)
     ):
         super(MandrillDualClassificationDataset, self).__init__(
             root_dir=root_dir,
@@ -258,6 +282,113 @@ class MandrillDualClassificationDataset(MandrillImageDataset):
             in_mem=in_mem,
             max_days=max_days,
         )
+<<<<<<< HEAD
+=======
+        self.same_age_gap = same_age_gap
+        self.n_classes = n_classes
+
+        assert (
+            n_classes == 3 or n_classes == 6
+        ), f"Expected n_classes to be one of [3,6] but found {n_classes}"
+
+        # Build an index to get directly classes for a given photo
+        self.indexes = {}
+
+        for i, current_row in tqdm(self.df.iterrows(), total=len(self.df)):
+            index = self.df.apply(
+                lambda row: self.compute_class(row, current_row, self.same_age_gap),
+                axis=1,
+            )
+            target_indexes = {}
+            for j in range(1, 7):
+                target_indexes[j] = index[index == j].index.tolist()
+            self.indexes[i] = target_indexes
+
+    def compute_class(self, row, target_row, margin):
+        """Compute the class given two row sample.
+
+        class 0: same row => ignore
+
+        # Intra mandrill
+        class 1: same mandrill younger
+        class 2: same mandrill same age
+        class 3: same mandrill older
+
+        # Inter mandrill
+        class 4: different mandrill younger
+        class 5: different mandrill same age
+        class 6: different mandrill older
+        """
+        if row["Photo_Name"] == target_row["Photo_Name"]:
+            return 0
+
+        age_class = self.compute_age_class(row["age"], target_row["age"], margin)
+
+        # Same mandrill
+        if row["Id"] == target_row["Id"]:
+            return age_class
+
+        # Two different mandrills so shift class
+        return age_class + 3
+
+    def compute_age_class(self, age, target_age, margin):
+        diff = target_age - age
+        if abs(diff) <= margin:
+            return 2
+        elif diff < 0:
+            return 1
+        else:
+            return 3
+
+    def random_same_mandrill(self):
+        return random.random() > 0.5
+
+    def add_list_class(self, dic, index, value):
+        if len(index[value]) > 0:
+            dic[value] = index[value]
+
+    def get_mandril(self, idx, classes):
+        # Get all possible samples
+        indexes = self.indexes[idx]
+        possible_classes = {}
+        for _class in classes:
+            self.add_list_class(possible_classes, indexes, _class)
+
+        if len(possible_classes) == 0:
+            return None, None
+
+        c = random.choices(list(possible_classes.keys()))[0]
+        target_list = possible_classes[c]
+        target_sample_idx = target_list[random.randint(0, len(target_list) - 1)]
+        x, y = self._getpair(target_sample_idx)
+
+        print(f"Chosen target mandrill with class = {c} and age = {y}")
+
+        return x, c
+
+    def get_same_mandrill(self, idx):
+        print("Same mandrill")
+        classes = [
+            RankingClass.SAME_MANDRILL_YOUNGER,
+            RankingClass.SAME_MANDRILL_SAME_AGE,
+            RankingClass.SAME_MANDRILL_OLDER,
+        ]
+        return self.get_mandril(idx, classes)
+
+    def get_different_mandrill(self, idx):
+        print("Different mandrill")
+        classes = [
+            RankingClass.DIFF_MANDRILL_YOUNGER,
+            RankingClass.DIFF_MANDRILL_SAME_AGE,
+            RankingClass.DIFF_MANDRILL_OLDER,
+        ]
+        x, c = self.get_mandril(idx, classes)
+
+        # Shift classes to the same mandrill classes
+        if self.n_classes == 3:
+            c = c - 3
+        return x, c
+>>>>>>> b775df2 (fix: issue with random choice with enum and class integer with different mandrills)
 
     def __getitem__(self, idx):
         # Randomize
