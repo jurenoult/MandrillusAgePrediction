@@ -362,12 +362,9 @@ class MandrillDualClassificationDataset(MandrillImageDataset):
         target_sample_idx = target_list[random.randint(0, len(target_list) - 1)]
         x, y = self._getpair(target_sample_idx)
 
-        print(f"Chosen target mandrill with class = {c} and age = {y}")
-
         return x, c
 
     def get_same_mandrill(self, idx):
-        print("Same mandrill")
         classes = [
             RankingClass.SAME_MANDRILL_YOUNGER,
             RankingClass.SAME_MANDRILL_SAME_AGE,
@@ -376,7 +373,6 @@ class MandrillDualClassificationDataset(MandrillImageDataset):
         return self.get_mandril(idx, classes)
 
     def get_different_mandrill(self, idx):
-        print("Different mandrill")
         classes = [
             RankingClass.DIFF_MANDRILL_YOUNGER,
             RankingClass.DIFF_MANDRILL_SAME_AGE,
