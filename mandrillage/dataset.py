@@ -6,6 +6,7 @@ from tqdm import tqdm
 import cv2
 import torch
 import random
+from enum import Enum
 
 from torch.utils.data import Dataset
 
@@ -23,11 +24,7 @@ CSV_ROWS = [
 
 
 def csvdate_to_date(shoot_date):
-    (
-        day,
-        month,
-        year,
-    ) = shoot_date.split("/")
+    year, month, day = shoot_date.split("/")
     return datetime.date(int(year), int(month), int(day))
 
 
@@ -85,7 +82,9 @@ def filter_by_qty(df, bins, qty_per_bin=20):
     min_count = range_counts.min()
 
     # Filter the DataFrame to have the same number of occurrences for each value range
-    filtered_df = df.groupby(value_range).apply(lambda x: x.sample(qty_per_bin, replace=True))
+    filtered_df = df.groupby(value_range).apply(
+        lambda x: x.sample(qty_per_bin, replace=True)
+    )
 
     # Reset the index of the filtered DataFrame
     filtered_df = filtered_df.reset_index(drop=True)

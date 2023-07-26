@@ -42,7 +42,7 @@ class Pipeline(object):
         self.kfold = self.config.kfold
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        log.info("Using device:", self.device.type)
+        log.info(f"Using device: {self.device}")
 
     def init_datamodule(self):
         raise ValueError("You must subclass self.init_datamodule() method")
