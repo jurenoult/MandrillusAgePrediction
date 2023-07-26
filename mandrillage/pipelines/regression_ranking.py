@@ -27,6 +27,8 @@ class RegressionRankingPipeline(BasicRegressionPipeline):
             dataframe=self.data,
             in_mem=False,
             max_days=self.max_days,
+            same_age_gap=self.same_age_gap,
+            n_classes=self.n_classes,
         )
         ranking_dataset.set_images(self.dataset.images)
 
@@ -47,7 +49,7 @@ class RegressionRankingPipeline(BasicRegressionPipeline):
         self.ranking_model = FeatureClassificationModel(
             self.backbone,
             input_dim=self.backbone.output_dim,
-            n_classes=3,
+            n_classes=self.n_classes,
             n_lin=self.classification_stages,
             lin_start=self.classification_lin_start,
         )
@@ -154,3 +156,5 @@ class RegressionRankingPipeline(BasicRegressionPipeline):
         self.classification_lin_start = self.config.model.classification_lin_start
         self.classification_stages = self.config.model.classification_stages
         self.ranking_learning_rate = self.config.training.ranking_learning_rate
+        self.n_classes = self.config.dataset.n_classes
+        self.same_age_gap = self.config.dataset.same_age_gap

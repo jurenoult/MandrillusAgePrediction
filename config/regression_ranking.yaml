@@ -16,6 +16,8 @@ dataset:
   dob_certain_only: True
   in_memory: True
   train_ratio: 0.8
+  n_classes: 3
+  same_age_gap: 10
 
 training:
   learning_rate: 0.0001
