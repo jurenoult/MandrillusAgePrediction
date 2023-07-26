@@ -117,6 +117,7 @@ class RegressionRankingPipeline(BasicRegressionPipeline):
             self.ranking_model.eval()
             val_regression_loss = 0.0
             val_ranking_loss = 0.0
+            n_repeat = 10
 
             with torch.no_grad():
                 val_regression_loss = self.val_loss(
@@ -127,6 +128,7 @@ class RegressionRankingPipeline(BasicRegressionPipeline):
                     self.ranking_model,
                     self.ranking_criterion,
                     self.device,
+                    repeat=n_repeat,
                 )
             val_regression_loss /= len(self.val_dataset)
             val_ranking_loss /= len(self.val_dataset)

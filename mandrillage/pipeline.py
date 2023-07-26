@@ -68,11 +68,13 @@ class Pipeline(object):
     def train(self):
         raise ValueError("You must subclass self.train() method")
 
-    def val_loss(self, loader, model, criterion, device):
+    def val_loss(self, loader, model, criterion, device, repeat=1):
         total_val_loss = 0.0
-        for x, y in tqdm(loader, leave=True):
-            total_val_loss += self.val_step(x, y, model, criterion, device)
-        return total_val_loss
+
+        for i in range(repeat):
+            for x, y in tqdm(loader, leave=True):
+                total_val_loss += self.val_step(x, y, model, criterion, device)
+        return total_val_loss / repeat
 
     def xy_to_device(self, x, y, device):
         if isinstance(x, list):
