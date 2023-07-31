@@ -41,7 +41,9 @@ class BasicRegressionPipeline(Pipeline):
             filter_dob_error=True,
             filter_certainty=self.config.dataset.dob_certain_only,
             max_age=self.max_days,
+            max_dob_error=self.max_dob_error,
         )
+        print(len(self.data))
         self.dataset = MandrillImageDataset(
             root_dir=self.dataset_images_path,
             dataframe=self.data,

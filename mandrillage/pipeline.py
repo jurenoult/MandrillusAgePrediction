@@ -25,6 +25,7 @@ class Pipeline(object):
         self.name = self.config.name
         self.max_age = self.config.dataset.max_age
         self.max_days = 365 * self.max_age
+        self.max_dob_error = self.config.dataset.max_dob_error
         self.dataset_metadata_path = os.path.join(
             self.config.dataset.basepath, self.config.dataset.metadata
         )

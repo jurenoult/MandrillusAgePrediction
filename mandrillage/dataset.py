@@ -11,15 +11,15 @@ from enum import IntEnum
 from torch.utils.data import Dataset
 
 CSV_ROWS = [
-    "Photo_Name",
-    "Id",
-    "Sex",
+    "photo_name",
+    "id",
+    "sex",
     "dob",
     "dob_estimated",
     "error_dob",
-    "FaceView",
-    "FaceQual",
-    "Shootdate",
+    "faceview",
+    "facequal",
+    "shootdate",
 ]
 
 

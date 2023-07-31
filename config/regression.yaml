@@ -14,6 +14,7 @@ dataset:
   images: "Images"
   max_age: 1
   dob_certain_only: True
+  max_dob_error: 0
   in_memory: True
   train_ratio: 0.8
 
