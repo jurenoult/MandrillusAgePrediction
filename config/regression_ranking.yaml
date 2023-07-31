@@ -1,7 +1,7 @@
 pipeline:
   _target_: mandrillage.pipelines.regression_ranking.RegressionRankingPipeline
 
-name: "BasicRegressionOneYear"
+name: "regression_ranking"
 train: True
 test: True
 resume: True
