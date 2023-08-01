@@ -25,6 +25,7 @@ training:
   batch_size: 32
   epochs: 100
   ranking_learning_rate: 0.0001
+  ranking_alpha: 0.0001
 
 model:
   # Number of dense neurons at first layer

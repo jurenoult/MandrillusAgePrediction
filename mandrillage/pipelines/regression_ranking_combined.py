@@ -65,7 +65,7 @@ class RegressionRankingCombinedPipeline(RegressionRankingPipeline):
                 )
 
                 # Backward pass and optimization
-                loss = reg_loss + ranking_loss
+                loss = reg_loss + self.ranking_alpha * ranking_loss
                 loss.backward()
                 self.optimizer.step()
                 self.ranking_optimizer.step()
@@ -130,3 +130,4 @@ class RegressionRankingCombinedPipeline(RegressionRankingPipeline):
         self.ranking_learning_rate = self.config.training.ranking_learning_rate
         self.n_classes = self.config.dataset.n_classes
         self.same_age_gap = self.config.dataset.same_age_gap
+        self.ranking_alpha = self.config.training.ranking_alpha
