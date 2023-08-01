@@ -124,10 +124,9 @@ class MandrillImageDataset(Dataset):
         root_dir,
         dataframe,
         img_size=(224, 224),
-        device="cuda",
         in_mem=True,
         max_days=1,
-        compute_stats=False,
+        individuals_ids=[],
     ):
         self.df = dataframe
         self.root_dir = root_dir
@@ -135,32 +134,18 @@ class MandrillImageDataset(Dataset):
         self.in_mem = in_mem
         self.max_days = max_days
 
-        self.mean = np.array([0.29712812, 0.35389232, 0.39265153])
-        self.std = np.array([0.1428217, 0.14765707, 0.15931044])
+        if len(individuals_ids) == 0:
+            print("No individuals data specified, using all dataset")
+            raise NotImplementedError
+        else:
+            # Filter dataframe with id array
+            self.df = self.df[self.df["id"].isin(individuals_ids)]
 
         if self.in_mem:
             self.images = []
             for i in tqdm(range(len(self.df))):
                 row = self.df.iloc[[i]]
                 self.images.append(self.load_photo(row))
-            if compute_stats:
-                self.compute_mean_std()
-                for i in tqdm(range(len(self.images))):
-                    self.images[i] = (self.images[i] - self.mean) / (self.std + 1e-9)
-
-    def compute_mean_std(self):
-        mean = np.zeros(3)
-        std = np.zeros(3)
-        print("==> Computing mean and std..")
-        for image in tqdm(self.images):
-            for i in range(3):
-                mean[i] += image[:, :, i].mean()
-                std[i] += image[:, :, i].std()
-        mean /= len(self.images)
-        std /= len(self.images)
-        print(mean, std)
-        self.mean = mean
-        self.std = std
 
     def load_photo(self, row):
         image_path = self.photo_path(row)
@@ -168,6 +153,10 @@ class MandrillImageDataset(Dataset):
         if image.shape[0:2] != self.img_size:
             image = cv2.resize(image, self.img_size, interpolation=cv2.INTER_AREA)
         image = image.astype(np.float32) / 255.0
+
+        # Normalization
+        image = (image - image.min()) / image.ptp()
+
         return image
 
     def photo_path(self, row):
@@ -187,6 +176,7 @@ class MandrillImageDataset(Dataset):
         return len(self.df)
 
     def _getpair(self, idx):
+        # All datas for this mandrill
         row = self.df.iloc[[idx]]
 
         target = float(row["age"].values[0])
@@ -197,7 +187,6 @@ class MandrillImageDataset(Dataset):
             image = self.images[idx]
         else:
             image = self.load_photo(row)
-            image = (image - self.mean) / (self.std + 1e-9)
 
         image = np.moveaxis(image, -1, 0).astype(np.float32)  # Channel first format
 
@@ -221,7 +210,7 @@ class ClassificationMandrillImageDataset(MandrillImageDataset):
         in_mem=True,
         n_classes=2,
         days_step=365,
-        compute_stats=False,
+        individuals_ids=[],
     ):
         super(ClassificationMandrillImageDataset, self).__init__(
             root_dir=root_dir,
@@ -230,6 +219,7 @@ class ClassificationMandrillImageDataset(MandrillImageDataset):
             device=device,
             in_mem=in_mem,
             max_days=1,
+            individuals_ids=individuals_ids,
         )
         self.days_step = days_step
         self.n_classes = n_classes
@@ -257,6 +247,7 @@ class MandrillDualClassificationDataset(MandrillImageDataset):
             device=device,
             in_mem=in_mem,
             max_days=max_days,
+            individuals_ids=individuals_ids,
         )
 
     def __getitem__(self, idx):

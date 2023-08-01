@@ -16,7 +16,7 @@ def get_logger(name=__name__) -> logging.Logger:
 log = get_logger(__name__)
 
 
-def create_kfold_dataset(dataset, k, fold_index):
+def create_kfold_data(dataset, k, fold_index):
     """
     Create a k-fold dataset using PyTorch.
 
@@ -34,9 +34,10 @@ def create_kfold_dataset(dataset, k, fold_index):
     """
     assert 0 <= fold_index < k, "Invalid fold_index. Should be in the range 0 to k-1."
 
-    indices = torch.arange(len(dataset))
+    ids = np.unique(dataset["id"].values)
+    indices = ids
 
-    fold_size = len(dataset) // k
+    fold_size = len(ids) // k
     val_indices = indices[fold_index * fold_size : (fold_index + 1) * fold_size]
 
     train_indices = torch.cat(
@@ -46,41 +47,19 @@ def create_kfold_dataset(dataset, k, fold_index):
     return train_indices, val_indices
 
 
-def create_loader(dataset, train_indices, val_indices, batch_size, num_workers=0):
-    train_dataset = Subset(dataset, train_indices)
-    val_dataset = Subset(dataset, val_indices)
+def split_indices(data, train_ratio):
+    # Get all ids
+    ids = np.unique(data["id"].values)
+    log.info(f"Splitting #{ids.shape[0]} indices with train ratio : {train_ratio}")
 
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=batch_size,
-        shuffle=True,
-        num_workers=num_workers,
+    train_size = int(train_ratio * ids.shape[0])
+
+    train_ids = ids[:train_size]
+    val_ids = ids[train_size:]
+    log.info(
+        f"Train indices #{train_ids.shape[0]} ; Validation indices #{val_ids.shape[0]}"
     )
-
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers,
-    )
-    return train_loader, val_loader, train_dataset, val_dataset
-
-
-def split_dataset(dataset, train_ratio, batch_size, augment=True, num_workers=0):
-    # Split the dataset into training and validation subsets
-    train_size = int(train_ratio * len(dataset))
-    val_size = len(dataset) - train_size
-    train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
-    if augment:
-        train_dataset = AugmentedDataset(train_dataset)
-
-    train_loader = DataLoader(
-        train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers
-    )
-    val_loader = DataLoader(
-        val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers
-    )
-    return train_loader, val_loader, train_dataset, val_dataset
+    return train_ids, val_ids
 
 
 def save(model, prefix, exp_name):

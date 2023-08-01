@@ -13,13 +13,7 @@ from mandrillage.dataset import MandrillImageDataset, read_dataset
 from mandrillage.evaluations import standard_regression_evaluation
 from mandrillage.models import RegressionModel, VGGFace
 from mandrillage.pipeline import Pipeline
-from mandrillage.utils import (
-    load,
-    save,
-    split_dataset,
-    create_kfold_dataset,
-    create_loader,
-)
+from mandrillage.utils import load, save, split_indices, create_kfold_data
 
 log = logging.getLogger(__name__)
 
@@ -36,6 +30,7 @@ class BasicRegressionPipeline(Pipeline):
         super(BasicRegressionPipeline, self).__init__()
 
     def init_datamodule(self):
+        # Read data
         self.data = read_dataset(
             self.dataset_metadata_path,
             filter_dob_error=True,
@@ -43,44 +38,49 @@ class BasicRegressionPipeline(Pipeline):
             max_age=self.max_days,
             max_dob_error=self.max_dob_error,
         )
-        print(len(self.data))
-        self.dataset = MandrillImageDataset(
+
+        # Make the split based on individual ids (cannot separate photos from the same id)
+        if self.kfold == 0:
+            self.train_indices, self.val_indices = split_indices(
+                self.data, self.train_ratio
+            )
+        else:
+            self.train_indices, self.val_indices = create_kfold_data(
+                self.data, k=self.kfold, fold_index=self.train_index
+            )
+
+        # Create dataset based on indices
+        self.train_dataset = MandrillImageDataset(
             root_dir=self.dataset_images_path,
             dataframe=self.data,
             in_mem=self.in_mem,
             max_days=self.max_days,
+            individuals_ids=self.train_indices,
+        )
+        self.val_dataset = MandrillImageDataset(
+            root_dir=self.dataset_images_path,
+            dataframe=self.data,
+            in_mem=self.in_mem,
+            max_days=self.max_days,
+            individuals_ids=self.val_indices,
         )
 
-        if self.kfold == 0:
-            (
-                self.train_loader,
-                self.val_loader,
-                self.train_dataset,
-                self.val_dataset,
-            ) = split_dataset(
-                self.dataset, self.train_ratio, self.batch_size, augment=False
-            )
-        else:
-            # Get indices
-            self.train_indices, self.val_indices = create_kfold_dataset(
-                self.dataset, self.kfold, self.train_index
-            )
-
-            # Create datasets and dataloader based on indices
-            (
-                self.train_loader,
-                self.val_loader,
-                self.train_dataset,
-                self.val_dataset,
-            ) = create_loader(
-                self.dataset, self.train_indices, self.val_indices, self.batch_size
-            )
+        self.train_loader = DataLoader(
+            self.train_dataset,
+            batch_size=self.batch_size,
+            shuffle=True,
+        )
+        self.val_loader = DataLoader(
+            self.val_dataset,
+            batch_size=self.batch_size,
+            shuffle=False,
+        )
 
     def init_logging(self):
         pass
 
     def init_model(self):
-        self.backbone = VGGFace()
+        self.backbone = VGGFace(start_filters=self.vgg_start_filters)
         self.model = RegressionModel(
             self.backbone,
             input_dim=self.backbone.output_dim,
@@ -180,5 +180,6 @@ class BasicRegressionPipeline(Pipeline):
     def init_parameters(self):
         super().init_parameters()
 
+        self.vgg_start_filters = self.config.model.vgg_start_filters
         self.regression_lin_start = self.config.model.regression_lin_start
         self.regression_stages = self.config.model.regression_stages
