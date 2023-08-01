@@ -140,6 +140,7 @@ class MandrillImageDataset(Dataset):
         else:
             # Filter dataframe with id array
             self.df = self.df[self.df["id"].isin(individuals_ids)]
+            self.df.reset_index(drop=True, inplace=True)
 
         if self.in_mem:
             self.images = []
@@ -244,7 +245,6 @@ class MandrillDualClassificationDataset(MandrillImageDataset):
             root_dir=root_dir,
             dataframe=dataframe,
             img_size=img_size,
-            device=device,
             in_mem=in_mem,
             max_days=max_days,
             individuals_ids=individuals_ids,

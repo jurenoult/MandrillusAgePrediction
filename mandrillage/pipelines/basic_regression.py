@@ -29,6 +29,13 @@ class BasicRegressionPipeline(Pipeline):
     def __init__(self):
         super(BasicRegressionPipeline, self).__init__()
 
+    def make_dataloader(self, dataset, shuffle=False):
+        return DataLoader(
+            dataset,
+            batch_size=self.batch_size,
+            shuffle=shuffle,
+        )
+
     def init_datamodule(self):
         # Read data
         self.data = read_dataset(
@@ -65,16 +72,8 @@ class BasicRegressionPipeline(Pipeline):
             individuals_ids=self.val_indices,
         )
 
-        self.train_loader = DataLoader(
-            self.train_dataset,
-            batch_size=self.batch_size,
-            shuffle=True,
-        )
-        self.val_loader = DataLoader(
-            self.val_dataset,
-            batch_size=self.batch_size,
-            shuffle=False,
-        )
+        self.train_loader = self.make_dataloader(self.train_dataset, shuffle=True)
+        self.val_loader = self.make_dataloader(self.val_dataset)
 
     def init_logging(self):
         pass

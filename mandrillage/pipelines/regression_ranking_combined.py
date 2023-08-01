@@ -6,9 +6,7 @@ import numpy as np
 
 from tqdm import tqdm
 
-from mandrillage.utils import split_dataset, save, load
-from mandrillage.dataset import MandrillDualClassificationDataset
-from mandrillage.models import FeatureClassificationModel
+from mandrillage.utils import save, load
 from mandrillage.pipelines.regression_ranking import RegressionRankingPipeline
 
 import logging

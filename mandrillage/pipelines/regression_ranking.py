@@ -3,10 +3,11 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
+from torch.utils.data import DataLoader
 
 from tqdm import tqdm
 
-from mandrillage.utils import split_dataset, save, load
+from mandrillage.utils import save, load
 from mandrillage.dataset import MandrillDualClassificationDataset
 from mandrillage.models import FeatureClassificationModel
 from mandrillage.pipelines.basic_regression import BasicRegressionPipeline
@@ -20,26 +21,33 @@ class RegressionRankingPipeline(BasicRegressionPipeline):
     def __init__(self):
         super(RegressionRankingPipeline, self).__init__()
 
-    def init_datamodule(self):
-        super().init_datamodule()
-        ranking_dataset = MandrillDualClassificationDataset(
+    def create_classification_dataset(self, indices, image_dataset):
+        dataset = MandrillDualClassificationDataset(
             root_dir=self.dataset_images_path,
             dataframe=self.data,
             in_mem=False,
             max_days=self.max_days,
             same_age_gap=self.same_age_gap,
             n_classes=self.n_classes,
+            individuals_ids=indices,
         )
-        ranking_dataset.set_images(self.dataset.images)
+        dataset.set_images(image_dataset.images)
+        return dataset
 
-        (
-            self.ranking_train_loader,
-            self.ranking_val_loader,
-            self.ranking_train_dataset,
-            self.ranking_val_dataset,
-        ) = split_dataset(
-            ranking_dataset, self.train_ratio, self.batch_size, augment=False
+    def init_datamodule(self):
+        super().init_datamodule()
+
+        self.ranking_train_dataset = self.create_classification_dataset(
+            self.train_indices, self.train_dataset
         )
+        self.ranking_val_dataset = self.create_classification_dataset(
+            self.val_indices, self.val_dataset
+        )
+
+        self.ranking_train_loader = self.make_dataloader(
+            self.ranking_train_dataset, shuffle=True
+        )
+        self.ranking_val_loader = self.make_dataloader(self.ranking_val_dataset)
 
     def init_logging(self):
         pass
