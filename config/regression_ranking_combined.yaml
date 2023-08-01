@@ -4,7 +4,7 @@ pipeline:
 name: "regression_ranking_combined"
 train: True
 test: True
-resume: True
+resume: False
 
 kfold: 0
 
