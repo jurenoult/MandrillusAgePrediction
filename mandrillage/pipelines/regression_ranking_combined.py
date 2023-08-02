@@ -133,7 +133,7 @@ class RegressionRankingCombinedPipeline(RegressionRankingPipeline):
                 f"Epoch [{epoch+1}/{self.epochs}] - "
                 f"Train Regression Loss: {train_regression_loss:.5f} - "
                 f"Train Ranking Loss: {train_ranking_loss:.5f} - "
-                f"Val Regression Loss: {val_regression_loss:.5f} - "
+                f"Val Regression Loss: {(val_regression_loss * self.max_days):.5f} - "
                 f"Val Ranking Loss: {val_ranking_loss:.5f}"
             )
 
