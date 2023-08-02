@@ -1,0 +1,45 @@
+# @package _global_
+
+# example hyperparameter optimization of some experiment with Optuna:
+# python train.py -m hparams_search=regression2d_optuna experiment=regression2d
+
+defaults:
+  - override /hydra/sweeper: optuna
+
+# here we define Optuna hyperparameter search
+# it optimizes for value returned from function with @hydra.main decorator
+# docs: https://hydra.cc/docs/next/plugins/optuna_sweeper
+hydra:
+  sweeper:
+    _target_: hydra_plugins.hydra_optuna_sweeper.optuna_sweeper.OptunaSweeper
+
+    # storage URL to persist optimization results
+    # for example, you can use SQLite if you set 'sqlite:///example.db'
+    storage: null
+
+    # name of the study to persist optimization results
+    study_name: null
+
+    # number of parallel workers
+    n_jobs: 1
+
+    # 'minimize' or 'maximize' the objective
+    direction: minimize
+
+    # total number of runs that will be executed
+    n_trials: 30
+
+    # choose Optuna hyperparameter sampler
+    # docs: https://optuna.readthedocs.io/en/stable/reference/samplers.html
+    sampler:
+      _target_: optuna.samplers.TPESampler
+      seed: 12345
+      n_startup_trials: 10 # number of random sampling runs before optimization starts
+
+    # define range of hyperparameters
+    params:
+      experiment.training.ranking_alpha: choice(1, 0.1, 0.01, 0.001, 0.0001, 0.00001, 0.000001)
+      experiment.model.vgg_start_filters: choice(2, 4, 8, 16)
+      experiment.model.vgg_output_dim: choice(256, 512, 1024, 2048, 2622)
+      experiment.model.regression_lin_start: choice(256, 512, 1024, 2048)
+      experiment.model.regression_stages: choice(1, 2, 3, 4, 5, 6)

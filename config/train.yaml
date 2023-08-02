@@ -1,0 +1,9 @@
+# @package _global_
+
+defaults:
+  - _self_
+  - log_dir: default.yaml
+  - hparams_search: null
+  - experiment: null
+
+name: null
