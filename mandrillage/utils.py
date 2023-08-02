@@ -76,6 +76,7 @@ def load(model, prefix, exp_name, output_dir):
     path = os.path.join(output_dir, "checkpoints")
     path = os.path.join(path, f"{prefix}_{exp_name}.h5")
     if os.path.exists(path):
+        log.info(f"Loading weight: {path}")
         model.load_state_dict(torch.load(path))
     else:
         log.warning(f"Could not find path at : {path}")
