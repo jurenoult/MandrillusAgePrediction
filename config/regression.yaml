@@ -1,3 +1,9 @@
+# @package _global_
+
+defaults:
+  - _self_
+  - log_dir: default.yaml
+
 pipeline:
   _target_: mandrillage.pipelines.basic_regression.BasicRegressionPipeline
 
