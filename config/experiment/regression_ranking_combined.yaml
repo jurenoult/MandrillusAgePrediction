@@ -25,17 +25,17 @@ training:
   batch_size: 32
   epochs: 100
   ranking_learning_rate: 0.0001
-  ranking_alpha: 0.0001
+  ranking_alpha: 1
 
 model:
-  vgg_start_filters: 64
-  vgg_output_dim: 2622
+  vgg_start_filters: 16
+  vgg_output_dim: 1024
 
   # Number of dense neurons at first layer
-  regression_lin_start: 2048
+  regression_lin_start: 256
   # Number of stages in the regression head.
   # Each stage divides the number of neurons by two
-  regression_stages: 6
+  regression_stages: 3
 
   classification_lin_start: ${experiment.model.regression_lin_start}
   classification_stages: ${experiment.model.regression_stages}
