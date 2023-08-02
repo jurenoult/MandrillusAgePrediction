@@ -83,8 +83,15 @@ class RegressionRankingPipeline(BasicRegressionPipeline):
         steps = len(self.train_loader)
 
         if self.resume:
-            self.model = load(self.model, "regression", exp_name=self.name)
-            self.ranking_model = load(self.ranking_model, "ranking", exp_name=self.name)
+            self.model = load(
+                self.model, "regression", exp_name=self.name, output_dir=self.output_dir
+            )
+            self.ranking_model = load(
+                self.ranking_model,
+                "ranking",
+                exp_name=self.name,
+                output_dir=self.output_dir,
+            )
 
         # Training loop
         best_val = np.inf
@@ -146,8 +153,18 @@ class RegressionRankingPipeline(BasicRegressionPipeline):
                     f"Val regression loss improved from {best_val:.4f} to {val_regression_loss:.4f}"
                 )
                 best_val = val_regression_loss
-                save(self.model, "regression", exp_name=self.name)
-                save(self.ranking_model, "ranking", exp_name=self.name)
+                save(
+                    self.model,
+                    "regression",
+                    exp_name=self.name,
+                    output_dir=self.output_dir,
+                )
+                save(
+                    self.ranking_model,
+                    "ranking",
+                    exp_name=self.name,
+                    output_dir=self.output_dir,
+                )
             else:
                 log.info(f"Val regression loss did not improved from {best_val:.4f}")
 

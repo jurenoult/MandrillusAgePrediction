@@ -107,7 +107,9 @@ class BasicRegressionPipeline(Pipeline):
         steps = len(self.train_loader)
 
         if self.resume:
-            self.model = load(self.model, "regression", exp_name=self.name)
+            self.model = load(
+                self.model, "regression", exp_name=self.name, output_dir=self.output_dir
+            )
 
         # Training loop
         best_val = np.inf
@@ -143,7 +145,12 @@ class BasicRegressionPipeline(Pipeline):
             if val_loss < best_val:
                 log.info(f"Val loss improved from {best_val:.4f} to {val_loss:.4f}")
                 best_val = val_loss
-                save(self.model, "regression", exp_name=self.name)
+                save(
+                    self.model,
+                    "regression",
+                    exp_name=self.name,
+                    output_dir=self.output_dir,
+                )
             else:
                 log.info(f"Val loss did not improved from {best_val:.4f}")
 
@@ -155,7 +162,9 @@ class BasicRegressionPipeline(Pipeline):
             )
 
     def test(self, max_display=0):
-        self.model = load(self.model, "regression", exp_name=self.name)
+        self.model = load(
+            self.model, "regression", exp_name=self.name, output_dir=self.output_dir
+        )
         self.model.eval()
 
         self.val_loader = DataLoader(self.val_dataset, batch_size=1, shuffle=False)

@@ -62,16 +62,23 @@ def split_indices(data, train_ratio):
     return train_ids, val_ids
 
 
-def save(model, prefix, exp_name):
-    torch.save(model.state_dict(), f"models/{prefix}_{exp_name}.h5")
+def save(model, prefix, exp_name, output_dir):
+    save_dir = os.path.join(output_dir, "checkpoints")
+
+    # Create directory if it doesn't exist
+    os.makedirs(save_dir, exist_ok=True)
+
+    path = os.path.join(save_dir, f"{prefix}_{exp_name}.h5")
+    torch.save(model.state_dict(), path)
 
 
-def load(model, prefix, exp_name):
-    path = f"models/{prefix}_{exp_name}.h5"
+def load(model, prefix, exp_name, output_dir):
+    path = os.path.join(output_dir, "checkpoints")
+    path = os.path.join(f"{prefix}_{exp_name}.h5")
     if os.path.exists(path):
         model.load_state_dict(torch.load(path))
     else:
-        print(f"Could not find path at : {path}")
+        log.warning(f"Could not find path at : {path}")
     return model
 
 
