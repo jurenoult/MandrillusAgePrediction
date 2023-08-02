@@ -79,7 +79,9 @@ class BasicRegressionPipeline(Pipeline):
         pass
 
     def init_model(self):
-        self.backbone = VGGFace(start_filters=self.vgg_start_filters)
+        self.backbone = VGGFace(
+            start_filters=self.vgg_start_filters, output_dim=self.vgg_output_dim
+        )
         self.model = RegressionModel(
             self.backbone,
             input_dim=self.backbone.output_dim,
@@ -189,5 +191,6 @@ class BasicRegressionPipeline(Pipeline):
         super().init_parameters()
 
         self.vgg_start_filters = self.config.model.vgg_start_filters
+        self.vgg_output_dim = self.config.model.vgg_output_dim
         self.regression_lin_start = self.config.model.regression_lin_start
         self.regression_stages = self.config.model.regression_stages
