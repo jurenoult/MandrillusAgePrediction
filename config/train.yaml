@@ -6,4 +6,4 @@ defaults:
   - hparams_search: null
   - experiment: null
 
-name: null
+name: ${experiment.name}

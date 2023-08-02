@@ -1,6 +1,7 @@
 import logging
 import os
 
+import random
 import numpy as np
 import torch
 from torch.utils.data import DataLoader, random_split, Subset
@@ -50,6 +51,11 @@ def create_kfold_data(dataset, k, fold_index):
 def split_indices(data, train_ratio):
     # Get all ids
     ids = np.unique(data["id"].values)
+
+    # Shuffle indices (but always the same)
+    np.random.seed(5)
+    np.random.shuffle(ids)
+
     log.info(f"Splitting #{ids.shape[0]} indices with train ratio : {train_ratio}")
 
     train_size = int(train_ratio * ids.shape[0])
