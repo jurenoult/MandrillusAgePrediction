@@ -9,7 +9,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from mandrillage.dataset import MandrillImageDataset, read_dataset
+from mandrillage.dataset import MandrillImageDataset, read_dataset, AugmentedDataset
 from mandrillage.evaluations import standard_regression_evaluation
 from mandrillage.models import RegressionModel, VGGFace
 from mandrillage.pipeline import Pipeline
@@ -36,6 +36,14 @@ class BasicRegressionPipeline(Pipeline):
             shuffle=shuffle,
         )
 
+    def stats(self, data):
+        data.reset_index(drop=True, inplace=True)
+
+        # groupby_id = data.groupby("id")
+        # stat = groupby_id["age"].mean()
+        stat = data["age"]
+        stat.hist(bins=20)
+
     def init_datamodule(self):
         # Read data
         self.data = read_dataset(
@@ -56,6 +64,15 @@ class BasicRegressionPipeline(Pipeline):
                 self.data, k=self.kfold, fold_index=self.train_index
             )
 
+        data = self.data
+        train_data = data[data["id"].isin(self.train_indices)]
+        val_data = data[data["id"].isin(self.val_indices)]
+        self.stats(train_data)
+        self.stats(val_data)
+        import matplotlib.pyplot as plt
+
+        plt.show()
+
         # Create dataset based on indices
         self.train_dataset = MandrillImageDataset(
             root_dir=self.dataset_images_path,
@@ -64,6 +81,7 @@ class BasicRegressionPipeline(Pipeline):
             max_days=self.max_days,
             individuals_ids=self.train_indices,
         )
+
         self.val_dataset = MandrillImageDataset(
             root_dir=self.dataset_images_path,
             dataframe=self.data,
@@ -71,6 +89,8 @@ class BasicRegressionPipeline(Pipeline):
             max_days=self.max_days,
             individuals_ids=self.val_indices,
         )
+
+        # self.train_dataset = AugmentedDataset(self.train_dataset)
 
         self.train_loader = self.make_dataloader(self.train_dataset, shuffle=True)
         self.val_loader = self.make_dataloader(self.val_dataset)

@@ -1,8 +1,7 @@
-# @package _global_
 pipeline:
   _target_: mandrillage.pipelines.basic_regression.BasicRegressionPipeline
 
-name: "RegressionOneYear"
+name: "regression"
 train: True
 test: True
 resume: False

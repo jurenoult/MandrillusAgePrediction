@@ -1,7 +1,7 @@
 pipeline:
-  _target_: mandrillage.pipelines.regression_ranking_combined.RegressionRankingCombinedPipeline
+  _target_: mandrillage.pipelines.regression_triplet.RegressionTripletPipeline
 
-name: "regression_ranking_combined"
+name: "regression_triplet"
 train: True
 test: True
 resume: False
@@ -17,15 +17,12 @@ dataset:
   max_dob_error: 0
   in_memory: True
   train_ratio: 0.8
-  n_classes: 3
-  same_age_gap: 0
 
 training:
   learning_rate: 0.0001
   batch_size: 32
   epochs: 100
-  ranking_learning_rate: 0.0001
-  ranking_alpha: 0.00001
+  triplet_alpha: 0.0001
 
 model:
   vgg_start_filters: 16
@@ -36,6 +33,3 @@ model:
   # Number of stages in the regression head.
   # Each stage divides the number of neurons by two
   regression_stages: 3
-
-  classification_lin_start: ${experiment.model.regression_lin_start}
-  classification_stages: ${experiment.model.regression_stages}

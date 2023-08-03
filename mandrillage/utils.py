@@ -38,10 +38,14 @@ def create_kfold_data(dataset, k, fold_index):
     ids = np.unique(dataset["id"].values)
     indices = ids
 
+    # Shuffle indices (but always the same)
+    np.random.seed(5)
+    np.random.shuffle(indices)
+
     fold_size = len(ids) // k
     val_indices = indices[fold_index * fold_size : (fold_index + 1) * fold_size]
 
-    train_indices = torch.cat(
+    train_indices = np.concatenate(
         [indices[: fold_index * fold_size], indices[(fold_index + 1) * fold_size :]]
     )
 

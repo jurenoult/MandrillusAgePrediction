@@ -109,6 +109,10 @@ class AugmentedDataset(Dataset):
     def __len__(self):
         return len(self.subset)
 
+    @property
+    def images(self):
+        return self.subset.images
+
     def __getitem__(self, idx):
         x, y = self.subset[idx]
         image = x.numpy()
@@ -271,15 +275,15 @@ class MandrillDualClassificationDataset(MandrillImageDataset):
 
 class MandrillTripleImageDataset(MandrillImageDataset):
     def __init__(
-        self, root_dir, dataframe, img_size=(224, 224), device="cuda", in_mem=False, max_days=0
+        self, root_dir, dataframe, img_size=(224, 224), device="cuda", in_mem=False, max_days=0, individuals_ids=None
     ):
         super(MandrillTripleImageDataset, self).__init__(
             root_dir=root_dir,
             dataframe=dataframe,
             img_size=img_size,
-            device=device,
             in_mem=in_mem,
             max_days=max_days,
+            individuals_ids=individuals_ids,
         )
 
     def compute_margin(self, y):
