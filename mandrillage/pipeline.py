@@ -77,14 +77,16 @@ class Pipeline(object):
                 total_val_loss += self.val_step(x, y, model, criterion, device)
         return total_val_loss / repeat
 
-    def xy_to_device(self, x, y, device):
+    def to_device(self, x, device):
         if isinstance(x, list):
             for i in range(len(x)):
                 x[i] = x[i].to(device)
         else:
             x = x.to(device)
-        y = y.to(device)
-        return x, y
+        return x
+
+    def xy_to_device(self, x, y, device):
+        return self.to_device(x, device), self.to_device(y, device)
 
     def val_step(self, x, y, model, criterion, device):
         x, y = self.xy_to_device(x, y, device)
@@ -105,17 +107,12 @@ class Pipeline(object):
         optimizer.zero_grad()
 
         # Forward pass
-
         y_hat = model(x)
         loss = criterion(y_hat, y)
 
-        # Backward pass and optimization
-        loss.backward()
-        optimizer.step()
-
         size = self.get_size(x)
 
-        return loss.item() * size
+        return loss, size
 
     def collect(self, loader, model, device, max_display=0):
         y_true = []
@@ -145,7 +142,7 @@ class Pipeline(object):
 
             # Visualize the images and predictions
             plt.imshow(images.squeeze().cpu().permute(1, 2, 0))
-            plt.title(f"Predicted: {pred}, Actual: {target}")
+            plt.title(f"Predicted: {pred}, Actual: {target}, Error: {abs(target-pred)}")
             plt.show()
 
         return y_true, y_pred

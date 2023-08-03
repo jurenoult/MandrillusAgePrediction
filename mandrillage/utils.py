@@ -53,23 +53,12 @@ def create_kfold_data(dataset, k, fold_index):
 
 
 def split_indices(data, train_ratio):
-    # Get all ids
-    ids = np.unique(data["id"].values)
+    val_split = 1.0 - train_ratio
+    k = int(1.0 // val_split)
+    # val_k = k - 1
+    val_k = 0
 
-    # Shuffle indices (but always the same)
-    np.random.seed(5)
-    np.random.shuffle(ids)
-
-    log.info(f"Splitting #{ids.shape[0]} indices with train ratio : {train_ratio}")
-
-    train_size = int(train_ratio * ids.shape[0])
-
-    train_ids = ids[:train_size]
-    val_ids = ids[train_size:]
-    log.info(
-        f"Train indices #{train_ids.shape[0]} ; Validation indices #{val_ids.shape[0]}"
-    )
-    return train_ids, val_ids
+    return create_kfold_data(data, k, val_k)
 
 
 def save(model, prefix, exp_name, output_dir):

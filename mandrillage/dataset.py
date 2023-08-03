@@ -93,10 +93,11 @@ def filter_by_qty(df, bins, qty_per_bin=20):
 
 import albumentations as A
 
-AUGMENTATION_PIPELINE = transform = A.Compose(
+AUGMENTATION_PIPELINE = A.Compose(
     [
-        A.Flip(p=0.5),
-        A.ShiftScaleRotate(p=0.5, shift_limit=0.01, scale_limit=0.2, rotate_limit=180),
+        A.ColorJitter(p=0.5),
+        A.OneOf([A.Blur(p=1.0), A.Defocus(p=1.0)], p=0.5),
+        # A.ShiftScaleRotate(p=0.5, shift_limit=0.01, scale_limit=0.2, rotate_limit=180),
     ],
     p=0.5,
 )
@@ -160,7 +161,7 @@ class MandrillImageDataset(Dataset):
         image = image.astype(np.float32) / 255.0
 
         # Normalization
-        image = (image - image.min()) / image.ptp()
+        # image = (image - image.min()) / image.ptp()
 
         return image
 
@@ -203,6 +204,62 @@ class MandrillImageDataset(Dataset):
 
     def __getitem__(self, idx):
         return self._getpair(idx)
+
+
+class MandrillSimilarityImageDataset(MandrillImageDataset):
+    def __init__(
+        self,
+        root_dir,
+        dataframe,
+        img_size=(224, 224),
+        in_mem=True,
+        max_days=1,
+        individuals_ids=[],
+    ):
+        super(MandrillSimilarityImageDataset, self).__init__(
+            root_dir, dataframe, img_size, in_mem, max_days, individuals_ids
+        )
+        self.ids = individuals_ids
+
+        self.valid_id_date = {}
+        valid_frames = self.df.groupby(["id", "shootdate"])
+        valid_frames = valid_frames.filter(lambda x: len(x) > 1)
+
+        for i, row in valid_frames.iterrows():
+            _id = row["id"]
+            if _id not in self.valid_id_date:
+                self.valid_id_date[_id] = []
+            shootdate = row["shootdate"]
+            if shootdate not in self.valid_id_date[_id]:
+                self.valid_id_date[_id].append(shootdate)
+
+    def get_photo_pair(self, idx, shootdate):
+        candidates = self.df[
+            (self.df["id"] == idx) & (self.df["shootdate"] == shootdate)
+        ].index
+        candidates = list(candidates)
+        first_candidate_idx = random.randint(0, len(candidates) - 1)
+        first_candidate = candidates.pop(first_candidate_idx)
+        second_candidate_idx = random.randint(0, len(candidates) - 1)
+        second_candidate = candidates.pop(second_candidate_idx)
+
+        return first_candidate, second_candidate
+
+    def __len__(self):
+        return len(self.valid_id_date)
+
+    def __getitem__(self, idx):
+        _id = list(self.valid_id_date.keys())[idx]
+        shootdates = self.valid_id_date[_id]
+        shootdate = shootdates[random.randint(0, len(shootdates) - 1)]
+        id1, id2 = self.get_photo_pair(_id, shootdate)
+
+        x1, y1 = self._getpair(id1)
+        x2, y2 = self._getpair(id2)
+
+        assert abs(y1 - y2) < 1
+
+        return x1, x2
 
 
 class ClassificationMandrillImageDataset(MandrillImageDataset):

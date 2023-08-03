@@ -9,7 +9,11 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from mandrillage.dataset import MandrillImageDataset, read_dataset, AugmentedDataset
+from mandrillage.dataset import (
+    MandrillImageDataset,
+    read_dataset,
+    MandrillSimilarityImageDataset,
+)
 from mandrillage.evaluations import standard_regression_evaluation
 from mandrillage.models import RegressionModel, VGGFace
 from mandrillage.pipeline import Pipeline
@@ -64,15 +68,6 @@ class BasicRegressionPipeline(Pipeline):
                 self.data, k=self.kfold, fold_index=self.train_index
             )
 
-        data = self.data
-        train_data = data[data["id"].isin(self.train_indices)]
-        val_data = data[data["id"].isin(self.val_indices)]
-        self.stats(train_data)
-        self.stats(val_data)
-        import matplotlib.pyplot as plt
-
-        plt.show()
-
         # Create dataset based on indices
         self.train_dataset = MandrillImageDataset(
             root_dir=self.dataset_images_path,
@@ -82,6 +77,15 @@ class BasicRegressionPipeline(Pipeline):
             individuals_ids=self.train_indices,
         )
 
+        self.train_similarity_dataset = MandrillSimilarityImageDataset(
+            root_dir=self.dataset_images_path,
+            dataframe=self.data,
+            in_mem=False,
+            max_days=self.max_days,
+            individuals_ids=self.train_indices,
+        )
+        self.train_similarity_dataset.set_images(self.train_dataset.images)
+
         self.val_dataset = MandrillImageDataset(
             root_dir=self.dataset_images_path,
             dataframe=self.data,
@@ -90,9 +94,10 @@ class BasicRegressionPipeline(Pipeline):
             individuals_ids=self.val_indices,
         )
 
-        # self.train_dataset = AugmentedDataset(self.train_dataset)
-
         self.train_loader = self.make_dataloader(self.train_dataset, shuffle=True)
+        self.train_similarity_loader = self.make_dataloader(
+            self.train_similarity_dataset, shuffle=True
+        )
         self.val_loader = self.make_dataloader(self.val_dataset)
 
     def init_logging(self):
@@ -114,7 +119,6 @@ class BasicRegressionPipeline(Pipeline):
     def init_losses(self):
         # Losses
         self.criterion = nn.MSELoss()
-        # self.criterion = nn.L1Loss()
         self.val_criterion = nn.L1Loss()
 
     def init_optimizers(self):
@@ -140,9 +144,10 @@ class BasicRegressionPipeline(Pipeline):
         for epoch in pbar:
             self.model.train()  # Set the model to train mode
             train_loss = 0.0
+            train_sim_loss = 0.0
 
             for i in tqdm(range(steps), leave=True):
-                train_loss += self.train_step(
+                reg_loss, reg_size = self.train_step(
                     self.train_loader,
                     self.optimizer,
                     self.model,
@@ -150,8 +155,28 @@ class BasicRegressionPipeline(Pipeline):
                     self.device,
                 )
 
+                ### SIMILARITY LOSS
+                x1, x2 = next(
+                    iter(
+                        self.train_similarity_loader,
+                    )
+                )
+                x1, x2 = self.xy_to_device(x1, x2, self.device)
+                y1, y2 = self.model(x1), self.model(x2)
+                sim_loss = self.criterion(y1, y2)
+
+                loss = reg_loss + sim_loss
+                # Backward pass and optimization
+                loss.backward()
+                self.optimizer.step()
+
+                train_sim_loss += sim_loss.item() * self.get_size(x1)
+                train_loss += reg_loss.item() * reg_size
+
                 n_samples = self.batch_size * (i + 1)
-                pbar.set_description(f"Train Loss: {(train_loss/n_samples):.5f}")
+                pbar.set_description(
+                    f"Regression train loss: {(train_loss/n_samples):.5f} - Similarity train loss: {(train_sim_loss/n_samples):.5f}"
+                )
 
             train_loss /= len(self.train_dataset)
 
