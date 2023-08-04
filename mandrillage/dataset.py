@@ -95,9 +95,10 @@ import albumentations as A
 
 AUGMENTATION_PIPELINE = A.Compose(
     [
+        # A.Flip(p=0.5),
+        A.ShiftScaleRotate(p=0.5, shift_limit=0.00, scale_limit=0.1, rotate_limit=180),
         A.ColorJitter(p=0.5),
         A.OneOf([A.Blur(p=1.0), A.Defocus(p=1.0)], p=0.5),
-        # A.ShiftScaleRotate(p=0.5, shift_limit=0.01, scale_limit=0.2, rotate_limit=180),
     ],
     p=0.5,
 )
@@ -114,13 +115,25 @@ class AugmentedDataset(Dataset):
     def images(self):
         return self.subset.images
 
-    def __getitem__(self, idx):
-        x, y = self.subset[idx]
+    def _augment(self, x):
         image = x.numpy()
         image = np.moveaxis(image, 0, -1)
         image = AUGMENTATION_PIPELINE(image=image)["image"]
         image = np.moveaxis(image, -1, 0)
-        return image, y
+        return image
+
+    def __getitem__(self, idx):
+        x, y = self.subset[idx]
+        return self._augment(x), y
+
+
+class AugmentedSimilarityDataset(AugmentedDataset):
+    def __init__(self, subset):
+        super(AugmentedSimilarityDataset, self).__init__(subset)
+
+    def __getitem__(self, idx):
+        x1, x2 = self.subset[idx]
+        return self._augment(x1), self._augment(x2)
 
 
 class MandrillImageDataset(Dataset):
@@ -165,6 +178,11 @@ class MandrillImageDataset(Dataset):
 
         return image
 
+    def value_to_str(self, value):
+        if not isinstance(value, str):
+            return value.values[0]
+        return value
+
     def photo_path(self, row):
         path = self.root_dir
         if "parent_folder" in row:
@@ -181,15 +199,14 @@ class MandrillImageDataset(Dataset):
     def __len__(self):
         return len(self.df)
 
-    def _getpair(self, idx):
-        # All datas for this mandrill
-        row = self.df.iloc[[idx]]
-
-        target = float(row["age"].values[0])
+    def _getpair_from_row(self, row, idx=-1):
+        target = row["age"]
+        if not isinstance(target, int):
+            target = float(row["age"].values[0])
         if self.max_days > 0:
             target = target / self.max_days
 
-        if self.in_mem:
+        if self.in_mem and idx >= 0:
             image = self.images[idx]
         else:
             image = self.load_photo(row)
@@ -197,6 +214,11 @@ class MandrillImageDataset(Dataset):
         image = np.moveaxis(image, -1, 0).astype(np.float32)  # Channel first format
 
         return torch.tensor(image), torch.tensor(target)
+
+    def _getpair(self, idx):
+        # All datas for this mandrill
+        row = self.df.iloc[[idx]]
+        return self._getpair_from_row(row, idx)
 
     def set_images(self, images):
         self.images = images

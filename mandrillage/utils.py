@@ -49,6 +49,8 @@ def create_kfold_data(dataset, k, fold_index):
         [indices[: fold_index * fold_size], indices[(fold_index + 1) * fold_size :]]
     )
 
+    print(f"Train indices: {train_indices}")
+    print(f"Val indices: {val_indices}")
     return train_indices, val_indices
 
 

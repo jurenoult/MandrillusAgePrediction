@@ -13,6 +13,8 @@ from mandrillage.dataset import (
     MandrillImageDataset,
     read_dataset,
     MandrillSimilarityImageDataset,
+    AugmentedDataset,
+    AugmentedSimilarityDataset,
 )
 from mandrillage.evaluations import standard_regression_evaluation
 from mandrillage.models import RegressionModel, VGGFace
@@ -41,12 +43,54 @@ class BasicRegressionPipeline(Pipeline):
         )
 
     def stats(self, data):
+        import matplotlib.pyplot as plt
+        import pandas as pd
+        import itertools
+
         data.reset_index(drop=True, inplace=True)
 
-        # groupby_id = data.groupby("id")
-        # stat = groupby_id["age"].mean()
-        stat = data["age"]
-        stat.hist(bins=20)
+        # How many individuals ?
+        ids = data.groupby("id")
+        print(f"#{len(ids)} individuals")
+
+        # # Flat range of age for all individuals
+        # h = data["age"].hist(bins=48)
+        # h.set_title("Range of ages for all individuals")
+        # plt.show()
+
+        # list_unique = ids["age"].unique().values.tolist()
+        # ages = list(itertools.chain.from_iterable(list_unique))
+        # h = pd.DataFrame(ages).hist(bins=48)
+        # # h.set_title("Range of unique ages for all individuals")
+        # plt.show()
+
+        # How many photos per individuals ?
+        photo_per_id = ids.size()
+        print(photo_per_id)
+        h = photo_per_id.hist(bins=len(ids))
+        h.set_title("# Photos per individuals")
+        plt.show()
+
+        # How many duplicates per individuals ?
+        duplicates = data.groupby(["id", "shootdate"]).filter(lambda x: len(x) > 1)
+        print(duplicates)
+        # duplicates = duplicates.size()
+        h = duplicates.hist(bins=20)
+        h.set_title("# of duplicates per individuals")
+        plt.show()
+
+        # What are the age of the duplicates ?
+        duplicates = duplicates["age"]
+        duplicates = duplicates.droplevel(axis=1, level=[0, 1]).reset_index()
+        h = duplicates.hist(bins=20)
+        h.set_title("Range of age for all duplicates")
+        plt.show()
+
+        # What are the range of age covered per individuals ?
+        minmax_ids = ids.max() - ids.min()
+        h = minmax_ids.hist(bins=len(ids))
+        h.set_title("Range of age covered by each individuals")
+        plt.show()
 
     def init_datamodule(self):
         # Read data
@@ -57,6 +101,9 @@ class BasicRegressionPipeline(Pipeline):
             max_age=self.max_days,
             max_dob_error=self.max_dob_error,
         )
+
+        data = self.data
+        # self.stats(data)
 
         # Make the split based on individual ids (cannot separate photos from the same id)
         if self.kfold == 0:
@@ -77,6 +124,8 @@ class BasicRegressionPipeline(Pipeline):
             individuals_ids=self.train_indices,
         )
 
+        self.train_dataset = AugmentedDataset(self.train_dataset)
+
         self.train_similarity_dataset = MandrillSimilarityImageDataset(
             root_dir=self.dataset_images_path,
             dataframe=self.data,
@@ -85,6 +134,9 @@ class BasicRegressionPipeline(Pipeline):
             individuals_ids=self.train_indices,
         )
         self.train_similarity_dataset.set_images(self.train_dataset.images)
+        self.train_similarity_dataset = AugmentedSimilarityDataset(
+            self.train_similarity_dataset
+        )
 
         self.val_dataset = MandrillImageDataset(
             root_dir=self.dataset_images_path,
@@ -209,6 +261,53 @@ class BasicRegressionPipeline(Pipeline):
                 f"Val Loss: {val_loss:.5f}"
             )
 
+    def predict_from_dataset(self, x):
+        z = torch.unsqueeze(x, axis=0)
+        z = z.to(self.device)
+        outputs = self.model(z)
+        pred = outputs.squeeze().detach().cpu().numpy()
+        return pred
+
+    def predict_per_individual(self, val_dataset):
+        import matplotlib.pyplot as plt
+
+        # For each individual
+        ids = val_dataset.df.groupby(["id"])
+
+        prediction_outputdir = os.path.join(self.output_dir, "prediction")
+        os.makedirs(prediction_outputdir, exist_ok=True)
+
+        for _id, group in ids:
+            individual_outputdir = os.path.join(prediction_outputdir, str(_id))
+            os.makedirs(individual_outputdir, exist_ok=True)
+            individual_y_true = []
+            individual_y_pred = []
+            for j, row in group.iterrows():
+                x, y = val_dataset._getpair_from_row(row)
+                y_hat = self.predict_from_dataset(x)
+                y = y.detach().cpu().numpy()
+                x = x.detach().cpu()
+
+                y = int(y * self.max_days)
+                y_hat = int(y_hat * self.max_days)
+
+                individual_y_true.append(y)
+                individual_y_pred.append(y_hat)
+
+                # Visualize the images and predictions
+                plt.imshow(x.permute(1, 2, 0))
+                plt.title(f"Predicted: {y_hat}, Real: {y}, Error: {abs(y_hat-y)}")
+                plt.savefig(os.path.join(individual_outputdir, row["photo_name"]))
+                plt.close()
+
+            fig = plt.figure(figsize=(12, 10))
+            plt.scatter(individual_y_true, individual_y_pred)
+            plt.plot(individual_y_true, individual_y_true)
+            plt.savefig(
+                os.path.join(individual_outputdir, "growth_prediction.png"),
+            )
+            plt.close()
+
     def test(self, max_display=0):
         self.model = load(
             self.model, "regression", exp_name=self.name, output_dir=self.output_dir
@@ -222,6 +321,9 @@ class BasicRegressionPipeline(Pipeline):
         results = standard_regression_evaluation(
             np.array(y_true), np.array(y_pred), self.name, 0, self.max_days
         )
+
+        log.info("Performing inference per individual")
+        self.predict_per_individual(self.val_dataset)
 
         scores_path = os.path.join(self.output_dir, f"scores_{self.train_index}.json")
         with open(scores_path, "w") as file:
