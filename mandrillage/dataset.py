@@ -145,7 +145,7 @@ class MandrillImageDataset(Dataset):
         in_mem=True,
         max_days=1,
         individuals_ids=[],
-        max_nbins=24,
+        max_nbins=12,
         training=False,
     ):
         self.df = dataframe
@@ -188,6 +188,10 @@ class MandrillImageDataset(Dataset):
 
         # Filter empty bins
         self.age_partitions = [v for v in self.age_partitions if len(v) > 0]
+        print(f"Partitionned data into {len(self.age_partitions)} partitions")
+        print(
+            f"Partitions size distribution: {', '.join([str(len(x)) for x in self.age_partitions])}"
+        )
 
     def load_photo(self, row):
         image_path = self.photo_path(row)
