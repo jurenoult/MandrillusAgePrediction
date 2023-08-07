@@ -163,7 +163,6 @@ class Pipeline(object):
             self.config.train or self.config.test
         ), "At least train or test must be true"
 
-        self.init()
         training_score = None
         test_score = None
 
@@ -172,7 +171,7 @@ class Pipeline(object):
             for i in range(self.kfold):
                 self.train_index = i
                 # Set data for this k
-                self.init_datamodule()
+                self.init()
                 # Train
                 training_score = self.train()
                 # Evaluate
@@ -191,7 +190,7 @@ class Pipeline(object):
             # Return mean score
             test_scores = np.mean(test_scores)
         else:
-            self.init_datamodule()
+            self.init()
             if self.config.train:
                 training_score = self.train()
             if self.config.test:
