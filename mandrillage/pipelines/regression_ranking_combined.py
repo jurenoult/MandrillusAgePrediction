@@ -18,13 +18,11 @@ class RegressionRankingCombinedPipeline(RegressionRankingPipeline):
     def __init__(self):
         super(RegressionRankingCombinedPipeline, self).__init__()
 
-    def train_step(self, loader, optimizer, model, criterion, device):
+    def train_step(self, loader, model, criterion, device):
         x, y = next(iter(loader))
         x, y = self.xy_to_device(x, y, device)
-        optimizer.zero_grad()
 
         # Forward pass
-
         y_hat = model(x)
         loss = criterion(y_hat, y)
 
@@ -58,16 +56,15 @@ class RegressionRankingCombinedPipeline(RegressionRankingPipeline):
             train_sim_loss = 0.0
 
             for i in tqdm(range(steps), leave=True):
+                self.optimizer.zero_grad()
                 reg_loss, reg_size = self.train_step(
                     self.train_loader,
-                    self.optimizer,
                     self.model,
                     self.criterion,
                     self.device,
                 )
                 ranking_loss, ranking_size = self.train_step(
                     self.ranking_train_loader,
-                    self.ranking_optimizer,
                     self.ranking_model,
                     self.ranking_criterion,
                     self.device,
@@ -87,7 +84,6 @@ class RegressionRankingCombinedPipeline(RegressionRankingPipeline):
                 loss = reg_loss + self.ranking_alpha * ranking_loss + sim_loss
                 loss.backward()
                 self.optimizer.step()
-                self.ranking_optimizer.step()
 
                 train_regression_loss += reg_loss.item() * reg_size
                 train_ranking_loss += ranking_loss.item() * ranking_size

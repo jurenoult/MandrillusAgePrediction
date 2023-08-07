@@ -69,8 +69,9 @@ class RegressionRankingPipeline(BasicRegressionPipeline):
 
     def init_optimizers(self):
         super().init_optimizers()
-        self.ranking_optimizer = optim.Adam(
-            self.ranking_model.parameters(), lr=self.ranking_learning_rate
+        self.optimizer = optim.Adam(
+            list(self.model.parameters()) + list(self.ranking_model.parameters()),
+            lr=self.learning_rate,
         )
 
     def init_callbacks(self):
