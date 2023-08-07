@@ -15,7 +15,7 @@ from mandrillage.dataset import (
     MandrillSimilarityImageDataset,
 )
 from mandrillage.evaluations import standard_regression_evaluation
-from mandrillage.models import RegressionModel, VGGFace
+from mandrillage.models import RegressionModel, VGGFace, DeepNormal
 from mandrillage.pipelines.basic_regression import BasicRegressionPipeline
 from mandrillage.utils import load, save
 from mandrillage.losses import GaussLoss
@@ -38,10 +38,9 @@ class BasicRegressionVariancePipeline(BasicRegressionPipeline):
         self.backbone = VGGFace(
             start_filters=self.vgg_start_filters, output_dim=self.vgg_output_dim
         )
-        self.model = RegressionModel(
+        self.model = DeepNormal(
             self.backbone,
             input_dim=self.backbone.output_dim,
-            output_dim=2,
             lin_start=self.regression_lin_start,
             n_lin=self.regression_stages,
         )
@@ -50,7 +49,7 @@ class BasicRegressionVariancePipeline(BasicRegressionPipeline):
 
     def init_losses(self):
         # Losses
-        self.criterion = nn.GaussLoss()
+        self.criterion = GaussLoss()
         self.val_criterion = nn.L1Loss()
 
     def init_optimizers(self):
@@ -61,6 +60,51 @@ class BasicRegressionVariancePipeline(BasicRegressionPipeline):
 
     def init_loggers(self):
         pass
+
+    def val_step(self, x, y, model, criterion, device):
+        x, y = self.xy_to_device(x, y, device)
+        y_hat = model(x)
+        loss = criterion(y_hat[..., 0], y)
+        return loss.item() * self.get_size(x)
+
+    def collect(self, loader, model, device, max_display=0):
+        import matplotlib.pyplot as plt
+
+        y_true = []
+        y_pred = []
+
+        # Perform inference on validation images
+        for i, (images, targets) in enumerate(loader):
+            # Forward pass
+            images = images.to(device)
+            outputs = model(images)
+
+            # Convert the outputs to numpy arrays
+            pred = outputs.squeeze().detach().cpu().numpy()
+            var = np.exp(pred[..., 1]) * 365
+            pred = pred[..., 0] * 365
+            target = targets.squeeze().cpu().numpy() * 365
+
+            y_true.append(target)
+            y_pred.append(pred)
+
+            if i >= max_display:
+                continue
+
+            # Display the results
+            print("Predicted Values:", pred)
+            print("Actual Values:", target)
+            print("Prediction Error: ", pred - target)
+            print()  # Add an empty line for separation
+
+            # Visualize the images and predictions
+            plt.imshow(images.squeeze().cpu().permute(1, 2, 0))
+            plt.title(
+                f"Predicted: {pred} +/- {var}, Actual: {target}, Error: {abs(target-pred)}"
+            )
+            plt.show()
+
+        return y_true, y_pred
 
     def train(self):
         steps = len(self.train_loader)
@@ -90,22 +134,11 @@ class BasicRegressionVariancePipeline(BasicRegressionPipeline):
                     self.device,
                 )
 
-                ### SIMILARITY LOSS
-                x1, x2 = next(
-                    iter(
-                        self.train_similarity_loader,
-                    )
-                )
-                x1, x2 = self.xy_to_device(x1, x2, self.device)
-                y1, y2 = self.model(x1), self.model(x2)
-                sim_loss = self.criterion(y1, y2)
-
-                loss = reg_loss + sim_loss
+                loss = reg_loss
                 # Backward pass and optimization
                 loss.backward()
                 self.optimizer.step()
 
-                train_sim_loss += sim_loss.item() * self.get_size(x1)
                 train_loss += reg_loss.item() * reg_size
 
                 n_samples = self.batch_size * (i + 1)
@@ -174,7 +207,7 @@ class BasicRegressionVariancePipeline(BasicRegressionPipeline):
                 x = x.detach().cpu()
 
                 y = int(y * self.max_days)
-                y_var = y_hat[..., 1] * self.max_days
+                y_var = np.exp(y_hat[..., 1]) * self.max_days
                 y_hat = int(y_hat[..., 0] * self.max_days)
 
                 individual_y_true.append(y)
@@ -207,7 +240,10 @@ class BasicRegressionVariancePipeline(BasicRegressionPipeline):
 
     def test(self, max_display=0):
         self.model = load(
-            self.model, "regression", exp_name=self.name, output_dir=self.output_dir
+            self.model,
+            "variance_regression",
+            exp_name=self.name,
+            output_dir=self.output_dir,
         )
         self.model.eval()
 

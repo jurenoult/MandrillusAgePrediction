@@ -1,6 +1,7 @@
 import torch.nn as nn
 from collections import OrderedDict
 
+
 def build_layers(n, method, prev_features, current_features, down=True):
     layers = OrderedDict()
     for i in range(n):
@@ -11,9 +12,77 @@ def build_layers(n, method, prev_features, current_features, down=True):
         else:
             current_features = current_features * 2
     return layers, prev_features
-    
+
+
+class DeepNormal(nn.Module):
+    def __init__(
+        self,
+        cnn_backbone=None,
+        input_dim=1,
+        lin_start=2048,
+        n_lin=6,
+    ):
+        super().__init__()
+
+        self.cnn_backbone = cnn_backbone
+
+        previous_feature_size = input_dim
+        current_feature_size = lin_start
+        last_feature_size = input_dim
+        self.blocks = None
+        if n_lin > 0:
+            lin_layers, last_feature_size = build_layers(
+                n_lin, self.block, previous_feature_size, current_feature_size
+            )
+        self.blocks = nn.Sequential(lin_layers)
+
+        # Mean parameters
+        self.mean_layer = nn.Sequential(
+            nn.Linear(last_feature_size, last_feature_size),
+            nn.ReLU(),
+            nn.Dropout(),
+            nn.Linear(last_feature_size, 1),
+            nn.Sigmoid(),
+        )
+
+        # Standard deviation parameters
+        self.std_layer = nn.Sequential(
+            nn.Linear(last_feature_size, last_feature_size),
+            nn.ReLU(),
+            nn.Dropout(),
+            nn.Linear(last_feature_size, 1),
+            nn.Sigmoid(),  # enforces positivity
+        )
+
+    def block(self, in_features, out_features):
+        lin = nn.Linear(in_features, out_features)
+        relu = nn.ReLU(inplace=True)
+        return nn.Sequential(lin, relu)
+
+    def forward(self, x):
+        # Shared embedding
+        shared = self.cnn_backbone(x)
+        shared = self.blocks(shared)
+
+        # Parametrization of the mean
+        u = self.mean_layer(shared)
+
+        # Parametrization of the standard deviation
+        q = self.std_layer(shared)
+
+        return torch.concat([u, q], axis=-1)
+
+
 class RegressionModel(nn.Module):
-    def __init__(self, cnn_backbone=None, input_dim=1, output_dim=1, lin_start=2048, n_lin=6, sigmoid=True):
+    def __init__(
+        self,
+        cnn_backbone=None,
+        input_dim=1,
+        output_dim=1,
+        lin_start=2048,
+        n_lin=6,
+        sigmoid=True,
+    ):
         super(RegressionModel, self).__init__()
         self.cnn_backbone = cnn_backbone
 
@@ -32,7 +101,7 @@ class RegressionModel(nn.Module):
         self.linear = nn.Linear(last_feature_size, output_dim)
         self.activation = nn.Sigmoid()
         self.sigmoid = sigmoid
-        
+
     def block(self, in_features, out_features):
         lin = nn.Linear(in_features, out_features)
         relu = nn.ReLU(inplace=True)
@@ -40,28 +109,37 @@ class RegressionModel(nn.Module):
 
     def forward(self, x):
         z = x
-        
+
         if self.cnn_backbone:
             z = self.cnn_backbone.features(z)
-        
+
         if self.blocks:
             z = self.blocks(z)
-        
+
         z = self.linear(z)
-        
+
         if self.output_dim == 1:
             z = torch.reshape(z, (z.shape[0],))
-        
+
         if self.sigmoid:
             z = self.activation(z)
         return z
 
+
 class FeatureClassificationModel(nn.Module):
-    def __init__(self, cnn_backbone, input_dim=1024, n_input=2, n_classes=2, lin_start=2048, n_lin=6):
+    def __init__(
+        self,
+        cnn_backbone,
+        input_dim=1024,
+        n_input=2,
+        n_classes=2,
+        lin_start=2048,
+        n_lin=6,
+    ):
         super(FeatureClassificationModel, self).__init__()
         self.cnn_backbone = cnn_backbone
         self.blocks = None
-        
+
         previous_feature_size = n_input * input_dim
         current_feature_size = lin_start
         last_feature_size = previous_feature_size
@@ -70,12 +148,12 @@ class FeatureClassificationModel(nn.Module):
         )
         self.blocks = nn.Sequential(lin_layers)
         self.age_gap = nn.Linear(last_feature_size, n_classes)
-    
+
     def block(self, in_features, out_features):
         lin = nn.Linear(in_features, out_features)
         relu = nn.ReLU(inplace=True)
         return nn.Sequential(lin, relu)
-    
+
     def get_z(self, x):
         z = self.cnn_backbone.features(x)
         return z
@@ -89,26 +167,30 @@ class FeatureClassificationModel(nn.Module):
             z = self.blocks(z)
         z = self.age_gap(z)
         return z
-    
+
+
 import os
 import torch
 from torch import nn
 from torch.nn import functional as F
 
-class BasicConv2d(nn.Module):
 
+class BasicConv2d(nn.Module):
     def __init__(self, in_planes, out_planes, kernel_size, stride, padding=0):
         super().__init__()
         self.conv = nn.Conv2d(
-            in_planes, out_planes,
-            kernel_size=kernel_size, stride=stride,
-            padding=padding, bias=False
-        ) # verify bias false
+            in_planes,
+            out_planes,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            bias=False,
+        )  # verify bias false
         self.bn = nn.BatchNorm2d(
             out_planes,
-            eps=0.001, # value found in tensorflow
-            momentum=0.1, # default pytorch value
-            affine=True
+            eps=0.001,  # value found in tensorflow
+            momentum=0.1,  # default pytorch value
+            affine=True,
         )
         self.relu = nn.ReLU(inplace=False)
 
@@ -120,7 +202,6 @@ class BasicConv2d(nn.Module):
 
 
 class Block35(nn.Module):
-
     def __init__(self, scale=1.0):
         super().__init__()
 
@@ -130,13 +211,13 @@ class Block35(nn.Module):
 
         self.branch1 = nn.Sequential(
             BasicConv2d(256, 32, kernel_size=1, stride=1),
-            BasicConv2d(32, 32, kernel_size=3, stride=1, padding=1)
+            BasicConv2d(32, 32, kernel_size=3, stride=1, padding=1),
         )
 
         self.branch2 = nn.Sequential(
             BasicConv2d(256, 32, kernel_size=1, stride=1),
             BasicConv2d(32, 32, kernel_size=3, stride=1, padding=1),
-            BasicConv2d(32, 32, kernel_size=3, stride=1, padding=1)
+            BasicConv2d(32, 32, kernel_size=3, stride=1, padding=1),
         )
 
         self.conv2d = nn.Conv2d(96, 256, kernel_size=1, stride=1)
@@ -154,7 +235,6 @@ class Block35(nn.Module):
 
 
 class Block17(nn.Module):
-
     def __init__(self, scale=1.0):
         super().__init__()
 
@@ -164,8 +244,8 @@ class Block17(nn.Module):
 
         self.branch1 = nn.Sequential(
             BasicConv2d(896, 128, kernel_size=1, stride=1),
-            BasicConv2d(128, 128, kernel_size=(1,7), stride=1, padding=(0,3)),
-            BasicConv2d(128, 128, kernel_size=(7,1), stride=1, padding=(3,0))
+            BasicConv2d(128, 128, kernel_size=(1, 7), stride=1, padding=(0, 3)),
+            BasicConv2d(128, 128, kernel_size=(7, 1), stride=1, padding=(3, 0)),
         )
 
         self.conv2d = nn.Conv2d(256, 896, kernel_size=1, stride=1)
@@ -182,7 +262,6 @@ class Block17(nn.Module):
 
 
 class Block8(nn.Module):
-
     def __init__(self, scale=1.0, noReLU=False):
         super().__init__()
 
@@ -193,8 +272,8 @@ class Block8(nn.Module):
 
         self.branch1 = nn.Sequential(
             BasicConv2d(1792, 192, kernel_size=1, stride=1),
-            BasicConv2d(192, 192, kernel_size=(1,3), stride=1, padding=(0,1)),
-            BasicConv2d(192, 192, kernel_size=(3,1), stride=1, padding=(1,0))
+            BasicConv2d(192, 192, kernel_size=(1, 3), stride=1, padding=(0, 1)),
+            BasicConv2d(192, 192, kernel_size=(3, 1), stride=1, padding=(1, 0)),
         )
 
         self.conv2d = nn.Conv2d(384, 1792, kernel_size=1, stride=1)
@@ -213,7 +292,6 @@ class Block8(nn.Module):
 
 
 class Mixed_6a(nn.Module):
-
     def __init__(self):
         super().__init__()
 
@@ -222,7 +300,7 @@ class Mixed_6a(nn.Module):
         self.branch1 = nn.Sequential(
             BasicConv2d(256, 192, kernel_size=1, stride=1),
             BasicConv2d(192, 192, kernel_size=3, stride=1, padding=1),
-            BasicConv2d(192, 256, kernel_size=3, stride=2)
+            BasicConv2d(192, 256, kernel_size=3, stride=2),
         )
 
         self.branch2 = nn.MaxPool2d(3, stride=2)
@@ -236,24 +314,23 @@ class Mixed_6a(nn.Module):
 
 
 class Mixed_7a(nn.Module):
-
     def __init__(self):
         super().__init__()
 
         self.branch0 = nn.Sequential(
             BasicConv2d(896, 256, kernel_size=1, stride=1),
-            BasicConv2d(256, 384, kernel_size=3, stride=2)
+            BasicConv2d(256, 384, kernel_size=3, stride=2),
         )
 
         self.branch1 = nn.Sequential(
             BasicConv2d(896, 256, kernel_size=1, stride=1),
-            BasicConv2d(256, 256, kernel_size=3, stride=2)
+            BasicConv2d(256, 256, kernel_size=3, stride=2),
         )
 
         self.branch2 = nn.Sequential(
             BasicConv2d(896, 256, kernel_size=1, stride=1),
             BasicConv2d(256, 256, kernel_size=3, stride=1, padding=1),
-            BasicConv2d(256, 256, kernel_size=3, stride=2)
+            BasicConv2d(256, 256, kernel_size=3, stride=2),
         )
 
         self.branch3 = nn.MaxPool2d(3, stride=2)
@@ -285,6 +362,7 @@ class InceptionResnetV1(nn.Module):
             initialized. (default: {None})
         dropout_prob {float} -- Dropout probability. (default: {0.6})
     """
+
     def __init__(self, dropout_prob=0.6, device=None, output_dim=1024, normalize=True):
         super().__init__()
 
@@ -330,11 +408,11 @@ class InceptionResnetV1(nn.Module):
         self.last_linear = nn.Linear(1792, output_dim, bias=False)
         self.last_bn = nn.BatchNorm1d(output_dim, eps=0.001, momentum=0.1, affine=True)
 
-        self.device = torch.device('cpu')
+        self.device = torch.device("cpu")
         if device is not None:
             self.device = device
             self.to(device)
-    
+
     def features(self, x):
         x = self.conv2d_1a(x)
         x = self.conv2d_2a(x)
@@ -354,7 +432,7 @@ class InceptionResnetV1(nn.Module):
         x = self.last_linear(x.view(x.shape[0], -1))
         x = self.last_bn(x)
         return x
-    
+
     def forward(self, x):
         """Calculate embeddings or logits given a batch of input image tensors.
 
@@ -368,46 +446,64 @@ class InceptionResnetV1(nn.Module):
         if self.normalize:
             x = F.normalize(x, p=2, dim=1)
         return x
-    
+
     def triplet_forward(self, x1, x2, x3):
         return self.forward(x1), self.forward(x2), self.forward(x3)
-    
+
+
 class VGGFace(nn.Module):
     def __init__(self, start_filters=64, output_dim=2622):
         super().__init__()
         self.model = nn.Sequential(
             self.conv_block(3, start_filters, kernel_size=3, zero_pad=1),
             self.conv_block(start_filters, start_filters, kernel_size=3, zero_pad=1),
-            nn.MaxPool2d(kernel_size=(2,2), stride=(2,2)),
-
-            self.conv_block(start_filters, start_filters*2, kernel_size=3, zero_pad=1),
-            self.conv_block(start_filters*2, start_filters*2, kernel_size=3, zero_pad=1),
-            nn.MaxPool2d(kernel_size=(2,2), stride=(2,2)),
-            
-            self.conv_block(start_filters*2, start_filters*4, kernel_size=3, zero_pad=1),
-            self.conv_block(start_filters*4, start_filters*4, kernel_size=3, zero_pad=1),
-            self.conv_block(start_filters*4, start_filters*4, kernel_size=3, zero_pad=1),
-            nn.MaxPool2d(kernel_size=(2,2), stride=(2,2)),
-            
-            self.conv_block(start_filters*4, start_filters*8, kernel_size=3, zero_pad=1),
-            self.conv_block(start_filters*8, start_filters*8, kernel_size=3, zero_pad=1),
-            self.conv_block(start_filters*8, start_filters*8, kernel_size=3, zero_pad=1),
-            nn.MaxPool2d(kernel_size=(2,2), stride=(2,2)),
-            
-            self.conv_block(start_filters*8, start_filters*8, kernel_size=3, zero_pad=1),
-            self.conv_block(start_filters*8, start_filters*8, kernel_size=3, zero_pad=1),
-            self.conv_block(start_filters*8, start_filters*8, kernel_size=3, zero_pad=1),
-            nn.MaxPool2d(kernel_size=(2,2), stride=(2,2)),
-            
-            self.conv_block(start_filters*8, start_filters*64, kernel_size=7),
+            nn.MaxPool2d(kernel_size=(2, 2), stride=(2, 2)),
+            self.conv_block(
+                start_filters, start_filters * 2, kernel_size=3, zero_pad=1
+            ),
+            self.conv_block(
+                start_filters * 2, start_filters * 2, kernel_size=3, zero_pad=1
+            ),
+            nn.MaxPool2d(kernel_size=(2, 2), stride=(2, 2)),
+            self.conv_block(
+                start_filters * 2, start_filters * 4, kernel_size=3, zero_pad=1
+            ),
+            self.conv_block(
+                start_filters * 4, start_filters * 4, kernel_size=3, zero_pad=1
+            ),
+            self.conv_block(
+                start_filters * 4, start_filters * 4, kernel_size=3, zero_pad=1
+            ),
+            nn.MaxPool2d(kernel_size=(2, 2), stride=(2, 2)),
+            self.conv_block(
+                start_filters * 4, start_filters * 8, kernel_size=3, zero_pad=1
+            ),
+            self.conv_block(
+                start_filters * 8, start_filters * 8, kernel_size=3, zero_pad=1
+            ),
+            self.conv_block(
+                start_filters * 8, start_filters * 8, kernel_size=3, zero_pad=1
+            ),
+            nn.MaxPool2d(kernel_size=(2, 2), stride=(2, 2)),
+            self.conv_block(
+                start_filters * 8, start_filters * 8, kernel_size=3, zero_pad=1
+            ),
+            self.conv_block(
+                start_filters * 8, start_filters * 8, kernel_size=3, zero_pad=1
+            ),
+            self.conv_block(
+                start_filters * 8, start_filters * 8, kernel_size=3, zero_pad=1
+            ),
+            nn.MaxPool2d(kernel_size=(2, 2), stride=(2, 2)),
+            self.conv_block(start_filters * 8, start_filters * 64, kernel_size=7),
             nn.Dropout(0.5),
-            self.conv_block(start_filters*64, start_filters*64, kernel_size=1),
+            self.conv_block(start_filters * 64, start_filters * 64, kernel_size=1),
             nn.Dropout(0.5),
-            nn.Conv2d(start_filters*64, output_dim, kernel_size=1),
+            nn.Conv2d(start_filters * 64, output_dim, kernel_size=1),
         )
 
         self.output_dim = output_dim
-        
+
     def conv_block(self, input_dim, output_dim, kernel_size, zero_pad=0):
         conv = nn.Conv2d(input_dim, output_dim, kernel_size=kernel_size)
         relu = nn.ReLU(inplace=True)
@@ -415,12 +511,12 @@ class VGGFace(nn.Module):
         if zero_pad > 0:
             return nn.Sequential(conv, relu, bn, nn.ZeroPad2d(zero_pad))
         return nn.Sequential(conv, relu, bn)
-    
+
     def features(self, x):
         x = self.model(x)
         x = torch.flatten(x, start_dim=1)
         return x
-    
+
     def forward(self, x):
         x = self.features(x)
         return x

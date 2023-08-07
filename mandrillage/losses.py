@@ -8,19 +8,11 @@ class GaussLoss(nn.Module):
     def __init__(self):
         super(GaussLoss, self).__init__()
 
-    def forward(self, y_pred, y_true):
-        """Negative log likelihood of y_true, with the likelihood defined by a normal distribution."""
-
-        means = y_pred[:, 0]
-        # We predict the log of the standard deviation, so exponentiate the prediction here
-        stds = torch.exp(y_pred[:, 1])
-        variances = stds * stds
-
-        log_p = -torch.log(torch.sqrt(2 * math.pi * variances)) - (y_true - means) * (
-            y_true - means
-        ) / (2 * variances)
-
-        return -log_p
+    def forward(self, y_pred, y):
+        mu = y_pred[:, 0]  # first output neuron
+        log_sig = y_pred[:, 1]  # second output neuron
+        sig = torch.exp(log_sig)  # undo the log
+        return torch.mean(2 * log_sig + ((y - mu) / sig) ** 2)
 
 
 class BinaryRangeMetric(nn.Module):
@@ -44,7 +36,7 @@ class RangeLoss(nn.Module):
 
     """
 
-    def __init__(self, alpha=0.1, beta=0.0, epsilon=1e-3):
+    def __init__(self, alpha=0.01, beta=0.0, epsilon=1e-3):
         super(RangeLoss, self).__init__()
         self.alpha = alpha
         self.beta = beta
