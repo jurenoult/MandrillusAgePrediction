@@ -84,11 +84,14 @@ class RegressionRankingPipeline(BasicRegressionPipeline):
 
         if self.resume:
             self.model = load(
-                self.model, "regression", exp_name=self.name, output_dir=self.output_dir
+                self.model,
+                f"regression_{self.train_index}",
+                exp_name=self.name,
+                output_dir=self.output_dir,
             )
             self.ranking_model = load(
                 self.ranking_model,
-                "ranking",
+                f"ranking_{self.train_index}",
                 exp_name=self.name,
                 output_dir=self.output_dir,
             )
@@ -155,13 +158,13 @@ class RegressionRankingPipeline(BasicRegressionPipeline):
                 best_val = val_regression_loss
                 save(
                     self.model,
-                    "regression",
+                    f"regression_{self.train_index}",
                     exp_name=self.name,
                     output_dir=self.output_dir,
                 )
                 save(
                     self.ranking_model,
-                    "ranking",
+                    f"ranking_{self.train_index}",
                     exp_name=self.name,
                     output_dir=self.output_dir,
                 )

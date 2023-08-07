@@ -188,7 +188,10 @@ class BasicRegressionPipeline(Pipeline):
 
         if self.resume:
             self.model = load(
-                self.model, "regression", exp_name=self.name, output_dir=self.output_dir
+                self.model,
+                f"regression_{self.train_index}",
+                exp_name=self.name,
+                output_dir=self.output_dir,
             )
 
         # Training loop
@@ -248,7 +251,7 @@ class BasicRegressionPipeline(Pipeline):
                 best_val = val_loss
                 save(
                     self.model,
-                    "regression",
+                    f"regression_{self.train_index}",
                     exp_name=self.name,
                     output_dir=self.output_dir,
                 )
@@ -311,7 +314,10 @@ class BasicRegressionPipeline(Pipeline):
 
     def test(self, max_display=0):
         self.model = load(
-            self.model, "regression", exp_name=self.name, output_dir=self.output_dir
+            self.model,
+            f"regression_{self.train_index}",
+            exp_name=self.name,
+            output_dir=self.output_dir,
         )
         self.model.eval()
 
