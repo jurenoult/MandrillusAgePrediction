@@ -145,12 +145,16 @@ class MandrillImageDataset(Dataset):
         in_mem=True,
         max_days=1,
         individuals_ids=[],
+        max_nbins=24,
+        training=False,
     ):
         self.df = dataframe
         self.root_dir = root_dir
         self.img_size = img_size
         self.in_mem = in_mem
         self.max_days = max_days
+        self.max_nbins = max_nbins
+        self.training = training
 
         if len(individuals_ids) == 0:
             print("No individuals data specified, using all dataset")
@@ -166,6 +170,25 @@ class MandrillImageDataset(Dataset):
                 row = self.df.iloc[[i]]
                 self.images.append(self.load_photo(row))
 
+        if self.training:
+            self.partition_by_age()
+
+    def partition_by_age(self):
+        # Split the max days into n_bins
+        days_step = self.max_days / self.max_nbins
+        # Init classes
+        self.age_partitions = [[] for _ in range(self.max_nbins)]
+        for i in tqdm(range(len(self.df))):
+            row = self.df.iloc[[i]]
+            # get current age
+            age = row["age"].values[0]
+            # Find which interval the age fits in
+            age_index = int(age // days_step)
+            self.age_partitions[age_index].append(i)
+
+        # Filter empty bins
+        self.age_partitions = [v for v in self.age_partitions if len(v) > 0]
+
     def load_photo(self, row):
         image_path = self.photo_path(row)
         image = cv2.imread(image_path)
@@ -174,7 +197,7 @@ class MandrillImageDataset(Dataset):
         image = image.astype(np.float32) / 255.0
 
         # Normalization
-        # image = (image - image.min()) / image.ptp()
+        image = (image - image.min()) / image.ptp()
 
         return image
 
@@ -225,6 +248,10 @@ class MandrillImageDataset(Dataset):
         self.in_mem = True
 
     def __getitem__(self, idx):
+        if self.training:
+            partition_index = idx % len(self.age_partitions)
+            idx = random.choice(self.age_partitions[partition_index])
+
         return self._getpair(idx)
 
 

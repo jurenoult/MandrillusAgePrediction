@@ -24,7 +24,7 @@ training:
   epochs: 100
 
 model:
-  vgg_start_filters: 32
+  vgg_start_filters: 16
   vgg_output_dim: 2622
 
   # Number of dense neurons at first layer

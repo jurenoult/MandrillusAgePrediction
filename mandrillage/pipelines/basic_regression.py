@@ -122,9 +122,10 @@ class BasicRegressionPipeline(Pipeline):
             in_mem=self.in_mem,
             max_days=self.max_days,
             individuals_ids=self.train_indices,
+            training=True,
         )
 
-        self.train_dataset = AugmentedDataset(self.train_dataset)
+        # self.train_dataset = AugmentedDataset(self.train_dataset)
 
         self.train_similarity_dataset = MandrillSimilarityImageDataset(
             root_dir=self.dataset_images_path,
@@ -134,9 +135,9 @@ class BasicRegressionPipeline(Pipeline):
             individuals_ids=self.train_indices,
         )
         self.train_similarity_dataset.set_images(self.train_dataset.images)
-        self.train_similarity_dataset = AugmentedSimilarityDataset(
-            self.train_similarity_dataset
-        )
+        # self.train_similarity_dataset = AugmentedSimilarityDataset(
+        #     self.train_similarity_dataset
+        # )
 
         self.val_dataset = MandrillImageDataset(
             root_dir=self.dataset_images_path,

@@ -52,6 +52,7 @@ class RegressionRankingCombinedPipeline(RegressionRankingPipeline):
             self.ranking_model.train()
             train_regression_loss = 0.0
             train_ranking_loss = 0.0
+            train_sim_loss = 0.0
 
             for i in tqdm(range(steps), leave=True):
                 reg_loss, reg_size = self.train_step(
@@ -69,19 +70,31 @@ class RegressionRankingCombinedPipeline(RegressionRankingPipeline):
                     self.device,
                 )
 
+                ### SIMILARITY LOSS
+                x1, x2 = next(
+                    iter(
+                        self.train_similarity_loader,
+                    )
+                )
+                x1, x2 = self.xy_to_device(x1, x2, self.device)
+                y1, y2 = self.model(x1), self.model(x2)
+                sim_loss = self.criterion(y1, y2)
+
                 # Backward pass and optimization
-                loss = reg_loss + self.ranking_alpha * ranking_loss
+                loss = reg_loss + self.ranking_alpha * ranking_loss + sim_loss
                 loss.backward()
                 self.optimizer.step()
                 self.ranking_optimizer.step()
 
                 train_regression_loss += reg_loss.item() * reg_size
                 train_ranking_loss += ranking_loss.item() * ranking_size
+                train_sim_loss += sim_loss.item() * self.get_size(x1)
 
                 n_samples = self.batch_size * (i + 1)
                 pbar.set_description(
                     f"Train Regression Loss: {(train_regression_loss/n_samples):.5f} - "
-                    f"Train Ranking Loss: {(train_ranking_loss/n_samples):.5f}"
+                    f"Train Ranking Loss: {(train_ranking_loss/n_samples):.5f} - "
+                    f"Train Sim Loss: {(train_sim_loss/n_samples):.5f}"
                 )
 
             train_regression_loss /= len(self.train_dataset)
