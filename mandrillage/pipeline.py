@@ -151,12 +151,21 @@ class Pipeline(object):
         raise ValueError("You must subclass self.test() method")
 
     def init(self):
+        log.info("Initializing experiment...")
+        log.info("Initializing logging...")
         self.init_logging()
+        log.info("Initializing model...")
         self.init_model()
+        log.info("Initializing losses...")
         self.init_losses()
+        log.info("Initializing optimizers...")
         self.init_optimizers()
+        log.info("Initializing callbacks...")
         self.init_callbacks()
+        log.info("Initializing loggers...")
         self.init_loggers()
+        log.info("Initializing datamodule...")
+        self.init_datamodule()
 
     def run(self):
         assert (

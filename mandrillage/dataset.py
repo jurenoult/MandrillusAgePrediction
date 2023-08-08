@@ -72,18 +72,18 @@ def read_dataset(path, filter_dob_error=True, filter_certainty=False, max_age=0,
     return data
 
 
-def filter_by_qty(df, bins, qty_per_bin=20):
+def resample(df, bins):
     value_range = pd.cut(df["age"], bins)
 
     # Count the occurrences of each value range
     range_counts = value_range.value_counts()
 
     # Find the minimum count among the value ranges
-    min_count = range_counts.min()
+    max_count = range_counts.max()
 
     # Filter the DataFrame to have the same number of occurrences for each value range
     filtered_df = df.groupby(value_range).apply(
-        lambda x: x.sample(qty_per_bin, replace=True)
+        lambda x: x.sample(max_count, replace=True)
     )
 
     # Reset the index of the filtered DataFrame
@@ -170,8 +170,8 @@ class MandrillImageDataset(Dataset):
                 row = self.df.iloc[[i]]
                 self.images.append(self.load_photo(row))
 
-        if self.training:
-            self.partition_by_age()
+        # if self.training:
+        #     self.partition_by_age()
 
     def partition_by_age(self):
         # Split the max days into n_bins
@@ -252,10 +252,9 @@ class MandrillImageDataset(Dataset):
         self.in_mem = True
 
     def __getitem__(self, idx):
-        if self.training:
-            partition_index = idx % len(self.age_partitions)
-            idx = random.choice(self.age_partitions[partition_index])
-
+        # if self.training:
+        #     partition_index = idx % len(self.age_partitions)
+        #     idx = random.choice(self.age_partitions[partition_index])
         return self._getpair(idx)
 
 

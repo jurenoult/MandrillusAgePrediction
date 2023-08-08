@@ -13,8 +13,7 @@ from mandrillage.dataset import (
     MandrillImageDataset,
     read_dataset,
     MandrillSimilarityImageDataset,
-    AugmentedDataset,
-    AugmentedSimilarityDataset,
+    resample,
 )
 from mandrillage.evaluations import standard_regression_evaluation
 from mandrillage.models import RegressionModel, VGGFace
@@ -42,56 +41,6 @@ class BasicRegressionPipeline(Pipeline):
             shuffle=shuffle,
         )
 
-    def stats(self, data):
-        import matplotlib.pyplot as plt
-        import pandas as pd
-        import itertools
-
-        data.reset_index(drop=True, inplace=True)
-
-        # How many individuals ?
-        ids = data.groupby("id")
-        print(f"#{len(ids)} individuals")
-
-        # # Flat range of age for all individuals
-        # h = data["age"].hist(bins=48)
-        # h.set_title("Range of ages for all individuals")
-        # plt.show()
-
-        # list_unique = ids["age"].unique().values.tolist()
-        # ages = list(itertools.chain.from_iterable(list_unique))
-        # h = pd.DataFrame(ages).hist(bins=48)
-        # # h.set_title("Range of unique ages for all individuals")
-        # plt.show()
-
-        # How many photos per individuals ?
-        photo_per_id = ids.size()
-        print(photo_per_id)
-        h = photo_per_id.hist(bins=len(ids))
-        h.set_title("# Photos per individuals")
-        plt.show()
-
-        # How many duplicates per individuals ?
-        duplicates = data.groupby(["id", "shootdate"]).filter(lambda x: len(x) > 1)
-        print(duplicates)
-        # duplicates = duplicates.size()
-        h = duplicates.hist(bins=20)
-        h.set_title("# of duplicates per individuals")
-        plt.show()
-
-        # What are the age of the duplicates ?
-        duplicates = duplicates["age"]
-        duplicates = duplicates.droplevel(axis=1, level=[0, 1]).reset_index()
-        h = duplicates.hist(bins=20)
-        h.set_title("Range of age for all duplicates")
-        plt.show()
-
-        # What are the range of age covered per individuals ?
-        minmax_ids = ids.max() - ids.min()
-        h = minmax_ids.hist(bins=len(ids))
-        h.set_title("Range of age covered by each individuals")
-        plt.show()
-
     def init_datamodule(self):
         # Read data
         self.data = read_dataset(
@@ -102,8 +51,7 @@ class BasicRegressionPipeline(Pipeline):
             max_dob_error=self.max_dob_error,
         )
 
-        data = self.data
-        # self.stats(data)
+        self.data = resample(self.data, bins=24)
 
         # Make the split based on individual ids (cannot separate photos from the same id)
         if self.kfold == 0:
@@ -125,8 +73,6 @@ class BasicRegressionPipeline(Pipeline):
             training=True,
         )
 
-        # self.train_dataset = AugmentedDataset(self.train_dataset)
-
         self.train_similarity_dataset = MandrillSimilarityImageDataset(
             root_dir=self.dataset_images_path,
             dataframe=self.data,
@@ -135,9 +81,6 @@ class BasicRegressionPipeline(Pipeline):
             individuals_ids=self.train_indices,
         )
         self.train_similarity_dataset.set_images(self.train_dataset.images)
-        # self.train_similarity_dataset = AugmentedSimilarityDataset(
-        #     self.train_similarity_dataset
-        # )
 
         self.val_dataset = MandrillImageDataset(
             root_dir=self.dataset_images_path,
