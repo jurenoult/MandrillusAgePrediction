@@ -176,7 +176,7 @@ class Pipeline(object):
         test_score = None
 
         if self.kfold > 1:
-            test_scores = []
+            test_scores = {}
             for i in range(self.kfold):
                 self.train_index = i
                 # Set data for this k
@@ -185,7 +185,7 @@ class Pipeline(object):
                 training_score = self.train()
                 # Evaluate
                 test_score = self.test()
-                test_scores.append(test_score)
+                test_scores[i] = test_score
 
             # Save cross val results
             cross_val_scores_path = os.path.join(
@@ -194,7 +194,7 @@ class Pipeline(object):
             with open(cross_val_scores_path, "w") as f:
                 import json
 
-                f.write(json.dumps(cross_val_scores_path))
+                f.write(json.dumps(test_scores))
 
             # Return mean score
             test_scores = np.mean(test_scores)
