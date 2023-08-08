@@ -224,12 +224,12 @@ class BasicRegressionPipeline(Pipeline):
         prediction_outputdir = os.path.join(self.output_dir, "prediction")
         os.makedirs(prediction_outputdir, exist_ok=True)
 
-        for _id, group in ids:
+        for _id, group in tqdm(ids):
             individual_outputdir = os.path.join(prediction_outputdir, str(_id))
             os.makedirs(individual_outputdir, exist_ok=True)
             individual_y_true = []
             individual_y_pred = []
-            for j, row in group.iterrows():
+            for j, row in tqdm(group.iterrows(), leave=True):
                 x, y = val_dataset._getpair_from_row(row)
                 y_hat = self.predict_from_dataset(x)
                 y = y.detach().cpu().numpy()
