@@ -190,7 +190,9 @@ class BasicRegressionVariancePipeline(BasicRegressionPipeline):
         # For each individual
         ids = val_dataset.df.groupby(["id"])
 
-        prediction_outputdir = os.path.join(self.output_dir, "prediction")
+        prediction_outputdir = os.path.join(
+            self.output_dir, f"prediction_{self.train_index}"
+        )
         os.makedirs(prediction_outputdir, exist_ok=True)
 
         for _id, group in ids:
