@@ -11,13 +11,14 @@ from tqdm import tqdm
 
 from torchmetrics.classification import Accuracy
 from mandrillage.dataset import (
-    MandrillImageDataset,
+    ClassificationMandrillImageDataset,
     read_dataset,
+    resample,
 )
-from mandrillage.evaluations import standard_regression_evaluation
+from mandrillage.evaluations import standard_classification_evaluation
 from mandrillage.models import RegressionModel, VGGFace
 from mandrillage.pipeline import Pipeline
-from mandrillage.utils import load, save, split_indices, create_kfold_data
+from mandrillage.utils import load, save, split_indices, create_kfold_data, softmax
 
 log = logging.getLogger(__name__)
 
@@ -50,6 +51,8 @@ class BasicClassificationPipeline(Pipeline):
             max_dob_error=self.max_dob_error,
         )
 
+        # self.data = resample(self.data, bins=self.n_classes)
+
         # Make the split based on individual ids (cannot separate photos from the same id)
         if self.kfold == 0:
             self.train_indices, self.val_indices = split_indices(
@@ -61,20 +64,21 @@ class BasicClassificationPipeline(Pipeline):
             )
 
         # Create dataset based on indices
-        self.train_dataset = MandrillImageDataset(
+        self.train_dataset = ClassificationMandrillImageDataset(
             root_dir=self.dataset_images_path,
             dataframe=self.data,
             in_mem=self.in_mem,
-            max_days=self.max_days,
+            days_step=self.max_days / self.n_classes,
+            n_classes=self.n_classes,
             individuals_ids=self.train_indices,
-            training=True,
         )
 
-        self.val_dataset = MandrillImageDataset(
+        self.val_dataset = ClassificationMandrillImageDataset(
             root_dir=self.dataset_images_path,
             dataframe=self.data,
             in_mem=self.in_mem,
-            max_days=self.max_days,
+            days_step=self.max_days / self.n_classes,
+            n_classes=self.n_classes,
             individuals_ids=self.val_indices,
         )
 
@@ -102,7 +106,9 @@ class BasicClassificationPipeline(Pipeline):
     def init_losses(self):
         # Losses
         self.criterion = nn.CrossEntropyLoss()
-        self.val_criterion = Accuracy(task="multiclass", num_classes=self.n_classes)
+        self.val_criterion = Accuracy(task="multiclass", num_classes=self.n_classes).to(
+            self.device
+        )
 
     def init_optimizers(self):
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
@@ -119,21 +125,20 @@ class BasicClassificationPipeline(Pipeline):
         if self.resume:
             self.model = load(
                 self.model,
-                f"regression_{self.train_index}",
+                f"classification_{self.train_index}",
                 exp_name=self.name,
                 output_dir=self.output_dir,
             )
 
         # Training loop
-        best_val = np.inf
+        best_val = 0.0
         pbar = tqdm(range(self.epochs))
         for epoch in pbar:
             self.model.train()  # Set the model to train mode
             train_loss = 0.0
-            train_sim_loss = 0.0
 
             for i in tqdm(range(steps), leave=True):
-                reg_loss, reg_size = self.train_step(
+                classif_loss, reg_size = self.train_step(
                     self.train_loader,
                     self.optimizer,
                     self.model,
@@ -141,27 +146,16 @@ class BasicClassificationPipeline(Pipeline):
                     self.device,
                 )
 
-                ### SIMILARITY LOSS
-                x1, x2 = next(
-                    iter(
-                        self.train_similarity_loader,
-                    )
-                )
-                x1, x2 = self.xy_to_device(x1, x2, self.device)
-                y1, y2 = self.model(x1), self.model(x2)
-                sim_loss = self.criterion(y1, y2)
-
-                loss = reg_loss + sim_loss
+                loss = classif_loss
                 # Backward pass and optimization
                 loss.backward()
                 self.optimizer.step()
 
-                train_sim_loss += sim_loss.item() * self.get_size(x1)
-                train_loss += reg_loss.item() * reg_size
+                train_loss += classif_loss.item() * reg_size
 
                 n_samples = self.batch_size * (i + 1)
                 pbar.set_description(
-                    f"Regression train loss: {(train_loss/n_samples):.5f} - Similarity train loss: {(train_sim_loss/n_samples):.5f}"
+                    f"Regression train loss: {(train_loss/n_samples):.5f}"
                 )
 
             train_loss /= len(self.train_dataset)
@@ -176,12 +170,12 @@ class BasicClassificationPipeline(Pipeline):
                 )
             val_loss /= len(self.val_dataset)
 
-            if val_loss < best_val:
+            if val_loss > best_val:
                 log.info(f"Val loss improved from {best_val:.4f} to {val_loss:.4f}")
                 best_val = val_loss
                 save(
                     self.model,
-                    f"regression_{self.train_index}",
+                    f"classification_{self.train_index}",
                     exp_name=self.name,
                     output_dir=self.output_dir,
                 )
@@ -194,6 +188,15 @@ class BasicClassificationPipeline(Pipeline):
                 f"Train Loss: {train_loss:.5f} - "
                 f"Val Loss: {val_loss:.5f}"
             )
+
+    def val_step(self, x, y, model, criterion, device):
+        x, y = self.xy_to_device(x, y, device)
+        y_hat = model(x)
+
+        y_hat = torch.argmax(y_hat, dim=-1)
+        y = torch.argmax(y, dim=-1)
+        loss = criterion(y_hat, y)
+        return loss.item() * self.get_size(x)
 
     def predict_from_dataset(self, x):
         z = torch.unsqueeze(x, axis=0)
@@ -213,26 +216,25 @@ class BasicClassificationPipeline(Pipeline):
         )
         os.makedirs(prediction_outputdir, exist_ok=True)
 
-        for _id, group in ids:
+        for _id, group in tqdm(ids, total=len(ids)):
             individual_outputdir = os.path.join(prediction_outputdir, str(_id))
             os.makedirs(individual_outputdir, exist_ok=True)
             individual_y_true = []
             individual_y_pred = []
             for j, row in group.iterrows():
                 x, y = val_dataset._getpair_from_row(row)
+                y = val_dataset.to_class(y)
                 y_hat = self.predict_from_dataset(x)
-                y = y.detach().cpu().numpy()
                 x = x.detach().cpu()
 
-                y = int(y * self.max_days)
-                y_hat = int(y_hat * self.max_days)
+                y_hat = np.argmax(softmax(y_hat))
 
                 individual_y_true.append(y)
                 individual_y_pred.append(y_hat)
 
                 # Visualize the images and predictions
                 plt.imshow(x.permute(1, 2, 0))
-                plt.title(f"Predicted: {y_hat}, Real: {y}, Error: {abs(y_hat-y)}")
+                plt.title(f"Predicted: {y_hat}, Real: {y}")
                 plt.savefig(os.path.join(individual_outputdir, row["photo_name"]))
                 plt.close()
 
@@ -244,10 +246,29 @@ class BasicClassificationPipeline(Pipeline):
             )
             plt.close()
 
+    def collect(self, loader, model, device, max_display=0):
+        y_true = []
+        y_pred = []
+
+        # Perform inference on validation images
+        for i, (images, targets) in enumerate(loader):
+            # Forward pass
+            images = images.to(device)
+            outputs = model(images)
+
+            # Convert the outputs to numpy arrays
+            output_prob = softmax(outputs.squeeze().detach().cpu().numpy())
+            real_class = np.argmax(targets.squeeze().cpu().numpy())
+
+            y_true.append(real_class)
+            y_pred.append(output_prob)
+
+        return y_true, y_pred
+
     def test(self, max_display=0):
         self.model = load(
             self.model,
-            f"regression_{self.train_index}",
+            f"classification_{self.train_index}",
             exp_name=self.name,
             output_dir=self.output_dir,
         )
@@ -257,8 +278,13 @@ class BasicClassificationPipeline(Pipeline):
         y_true, y_pred = self.collect(
             self.val_loader, self.model, self.device, max_display=max_display
         )
-        results = standard_regression_evaluation(
-            np.array(y_true), np.array(y_pred), self.name, 0, self.max_days
+
+        results = standard_classification_evaluation(
+            np.array(y_true),
+            np.array(y_pred),
+            self.max_days / self.n_classes,
+            self.n_classes,
+            "classification",
         )
 
         log.info("Performing inference per individual")

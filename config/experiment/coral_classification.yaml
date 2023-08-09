@@ -1,7 +1,7 @@
 pipeline:
-  _target_: mandrillage.pipelines.basic_regression.BasicRegressionPipeline
+  _target_: mandrillage.pipelines.coral_classification.CoralClassificationPipeline
 
-name: "regression"
+name: "coral_classification"
 train: True
 test: True
 resume: False
@@ -17,12 +17,12 @@ dataset:
   max_dob_error: 0
   in_memory: True
   train_ratio: 0.8
+  n_classes: 24
 
 training:
   learning_rate: 0.0001
   batch_size: 16
   epochs: 100
-  sim_alpha: 10
 
 model:
   vgg_start_filters: 16

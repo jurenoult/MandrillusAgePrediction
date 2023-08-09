@@ -320,29 +320,36 @@ class ClassificationMandrillImageDataset(MandrillImageDataset):
         root_dir,
         dataframe,
         img_size=(224, 224),
-        device="cuda",
         in_mem=True,
         n_classes=2,
         days_step=365,
         individuals_ids=[],
+        return_integer=False,
     ):
         super(ClassificationMandrillImageDataset, self).__init__(
             root_dir=root_dir,
             dataframe=dataframe,
             img_size=img_size,
-            device=device,
             in_mem=in_mem,
             max_days=1,
             individuals_ids=individuals_ids,
         )
         self.days_step = days_step
         self.n_classes = n_classes
+        self.return_integer = return_integer
+
+    def to_class(self, age):
+        y_c = age / self.days_step
+        y_c = max(0, np.ceil(y_c.numpy()) - 1)
+        return int(y_c)
 
     def __getitem__(self, idx):
         x, age = self._getpair(idx)
 
-        y_c = age / self.days_step
-        y_c = max(0, np.ceil(y_c.numpy()) - 1)
+        y_c = self.to_class(age)
+
+        if self.return_integer:
+            return x, y_c
 
         y = torch.zeros([self.n_classes])
         y[int(y_c)] = 1

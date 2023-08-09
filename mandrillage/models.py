@@ -1,5 +1,7 @@
 import torch.nn as nn
 from collections import OrderedDict
+from coral_pytorch.layers import CoralLayer
+import torch
 
 
 def build_layers(n, method, prev_features, current_features, down=True):
@@ -71,6 +73,28 @@ class DeepNormal(nn.Module):
         q = self.std_layer(shared)
 
         return torch.concat([u, q], axis=-1)
+
+
+class CoralModel(torch.nn.Module):
+    def __init__(self, backbone, input_dim, num_classes):
+        super(CoralModel, self).__init__()
+
+        self.backbone_cnn = backbone
+
+        ### Specify CORAL layer
+        self.fc = CoralLayer(size_in=input_dim, num_classes=num_classes)
+        ###--------------------------------------------------------------------###
+
+    def forward(self, x):
+        x = self.backbone_cnn(x)
+        x = x.view(x.size(0), -1)  # flatten
+
+        ##### Use CORAL layer #####
+        logits = self.fc(x)
+        probas = torch.sigmoid(logits)
+        ###--------------------------------------------------------------------###
+
+        return logits, probas
 
 
 class RegressionModel(nn.Module):

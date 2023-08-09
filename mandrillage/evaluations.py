@@ -26,16 +26,21 @@ def standard_regression_evaluation(y_true, y_pred, name, min_range, max_range):
 
 
 def standard_classification_evaluation(
-    y_true, y_prob_pred, class_step, n_classes, name
+    y_true, y_prob_pred, class_step, n_classes, name, prob_to_label=np.argmax
 ):
-    y_pred = [np.argmax(prob) for prob in y_prob_pred]
+    y_pred = [prob_to_label(prob) for prob in y_prob_pred]
     classification_name = f"{name}_classification"
     classification_results = evaluate_classification(
         y_true, y_pred, class_step, n_classes
     )
     regression_name = f"{name}_as_regression"
     regression_results = evaluate_classification_as_regression(
-        y_true, y_prob_pred, class_step, n_classes, regression_name
+        y_true,
+        y_prob_pred,
+        class_step,
+        n_classes,
+        regression_name,
+        prob_to_label=prob_to_label,
     )
 
     return format_results(
@@ -161,30 +166,30 @@ def evaluate_classification(y_true, y_pred, class_step, n_classes, display=False
 
 
 def evaluate_classification_as_regression(
-    y_true_classes, y_pred_prob_classes, class_step, n_classes, name
+    y_true_classes, y_pred_prob_classes, class_step, n_classes, name, prob_to_label
 ):
     labels = range_to_labels(class_step, n_classes)
     y_true_scalars = classification_to_regression(y_true_classes, labels)
     y_pred_scalars = classification_to_regression(
-        np.argmax(y_pred_prob_classes, axis=-1), labels
+        prob_to_label(y_pred_prob_classes), labels
     )
-    y_pred_weigthed_scalars = classification_prob_to_regression(
-        y_pred_prob_classes, labels
-    )
+    # y_pred_weigthed_scalars = classification_prob_to_regression(
+    #     y_pred_prob_classes, labels
+    # )
     min_range = 0
     max_range = class_step * n_classes
     return {
         "argmax": evaluate_regression(
             y_true_scalars, y_pred_scalars, [class_step, 90], min_range, max_range, name
         ),
-        "weighted_scalars": evaluate_regression(
-            y_true_scalars,
-            y_pred_weigthed_scalars,
-            [class_step, 90],
-            min_range,
-            max_range,
-            name,
-        ),
+        # "weighted_scalars": evaluate_regression(
+        #     y_true_scalars,
+        #     y_pred_weigthed_scalars,
+        #     [class_step, 90],
+        #     min_range,
+        #     max_range,
+        #     name,
+        # ),
     }
 
 
@@ -234,7 +239,7 @@ def classification_prob_to_regression(y_classes_prob, labels):
 def prob_class_to_scalar(class_prob, ranges):
     np_mid_ranges = np.array([(stop + start) / 2 for start, stop in ranges])
     total_prob = np.sum(class_prob)
-    assert abs(total_prob - 1.0) < 1e-4
+    # assert abs(total_prob - 1.0) < 1e-4
     # Compute weighted probability
     scalar = np.sum(np_mid_ranges * np.array(class_prob))
     return scalar
