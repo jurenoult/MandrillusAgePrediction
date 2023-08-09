@@ -5,6 +5,7 @@ import timm
 import torch
 import volo
 from volo import volo_d1
+import torchfile
 
 
 class VoloBackbone(nn.Module):
@@ -563,6 +564,39 @@ class VGGFace(nn.Module):
         if zero_pad > 0:
             return nn.Sequential(conv, relu, bn, nn.ZeroPad2d(zero_pad))
         return nn.Sequential(conv, relu, bn)
+
+    def load_weights(self, path="data/pretrained/VGG_FACE.t7"):
+        """Function to load luatorch pretrained
+
+        Args:
+            path: path for the luatorch pretrained
+        """
+        model = torchfile.load(path)
+        counter = 1
+        block = 1
+        for i, layer in enumerate(model.modules):
+            if layer.weight is not None:
+                if block <= 5:
+                    self_layer = getattr(self, "conv_%d_%d" % (block, counter))
+                    counter += 1
+                    if counter > self.block_size[block - 1]:
+                        counter = 1
+                        block += 1
+                    self_layer.weight.data[...] = torch.tensor(layer.weight).view_as(
+                        self_layer.weight
+                    )[...]
+                    self_layer.bias.data[...] = torch.tensor(layer.bias).view_as(
+                        self_layer.bias
+                    )[...]
+                else:
+                    self_layer = getattr(self, "fc%d" % (block))
+                    block += 1
+                    self_layer.weight.data[...] = torch.tensor(layer.weight).view_as(
+                        self_layer.weight
+                    )[...]
+                    self_layer.bias.data[...] = torch.tensor(layer.bias).view_as(
+                        self_layer.bias
+                    )[...]
 
     def features(self, x):
         x = self.model(x)

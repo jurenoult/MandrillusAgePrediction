@@ -250,8 +250,21 @@ class BasicRegressionPipeline(Pipeline):
                 plt.savefig(os.path.join(individual_outputdir, row["photo_name"]))
                 plt.close()
 
+            y_individual_pred_means = []
+            np_pred = np.array(individual_y_pred)
+            np_true = np.array(individual_y_true)
+            for y_true in individual_y_true:
+                mean = np.mean(np_pred[np_true == y_true])
+                y_individual_pred_means.append(mean)
+
             fig = plt.figure(figsize=(12, 10))
+
+            plt.xlim([0, self.max_days])
+            plt.ylim([0, self.max_days])
+            plt.xlabel("Real age (in days)")
+            plt.ylabel("Predicted age (in days)")
             plt.scatter(individual_y_true, individual_y_pred)
+            plt.scatter(individual_y_true, y_individual_pred_means, marker="^")
             plt.plot(individual_y_true, individual_y_true)
             plt.savefig(
                 os.path.join(individual_outputdir, "growth_prediction.png"),

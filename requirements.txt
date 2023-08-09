@@ -13,3 +13,4 @@ coral-pytorch
 timm
 torchvision
 tlt
+torchfile
