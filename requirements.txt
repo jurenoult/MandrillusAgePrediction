@@ -13,4 +13,3 @@ coral-pytorch
 timm
 torchvision
 tlt
-./volo
