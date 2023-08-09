@@ -10,3 +10,7 @@ seaborn
 hydra-optuna-sweeper
 mlflow
 coral-pytorch
+timm
+torchvision
+tlt
+./volo
