@@ -51,7 +51,7 @@ class BasicRegressionPipeline(Pipeline):
             max_dob_error=self.max_dob_error,
         )
 
-        self.data = resample(self.data, bins=12)
+        # self.data = resample(self.data, bins=12)
 
         # Make the split based on individual ids (cannot separate photos from the same id)
         if self.kfold == 0:
@@ -100,10 +100,10 @@ class BasicRegressionPipeline(Pipeline):
         pass
 
     def init_model(self):
-        # self.backbone = VGGFace(
-        #     start_filters=self.vgg_start_filters, output_dim=self.vgg_output_dim
-        # )
-        self.backbone = VoloBackbone()
+        self.backbone = VGGFace(
+            start_filters=self.vgg_start_filters, output_dim=self.vgg_output_dim
+        )
+        # self.backbone = VoloBackbone()
         self.model = RegressionModel(
             self.backbone,
             input_dim=self.backbone.output_dim,

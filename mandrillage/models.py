@@ -11,7 +11,7 @@ class VoloBackbone(nn.Module):
     def __init__(
         self,
         base_name: str = "volo_d1",
-        pretrained=False,
+        pretrained=True,
     ):
         """Initialize"""
         self.base_name = base_name

@@ -125,8 +125,8 @@ class Pipeline(object):
             outputs = model(images)
 
             # Convert the outputs to numpy arrays
-            pred = outputs.squeeze().detach().cpu().numpy() * 365
-            target = targets.squeeze().cpu().numpy() * 365
+            pred = outputs.squeeze().detach().cpu().numpy() * self.max_days
+            target = targets.squeeze().cpu().numpy() * self.max_days
 
             y_true.append(target)
             y_pred.append(pred)

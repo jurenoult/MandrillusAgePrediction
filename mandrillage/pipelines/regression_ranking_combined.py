@@ -81,7 +81,11 @@ class RegressionRankingCombinedPipeline(RegressionRankingPipeline):
                 sim_loss = self.criterion(y1, y2)
 
                 # Backward pass and optimization
-                loss = reg_loss + self.ranking_alpha * ranking_loss + sim_loss
+                loss = (
+                    reg_loss
+                    + self.ranking_alpha * ranking_loss
+                    + self.sim_alpha * sim_loss
+                )
                 loss.backward()
                 self.optimizer.step()
 

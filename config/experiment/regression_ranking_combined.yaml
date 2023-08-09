@@ -25,10 +25,11 @@ training:
   batch_size: 16
   epochs: 100
   ranking_learning_rate: 0.0001
-  ranking_alpha: 0.0001
+  ranking_alpha: 0.001
+  sim_alpha: 10
 
 model:
-  vgg_start_filters: 16
+  vgg_start_filters: 64
   vgg_output_dim: 2622
 
   # Number of dense neurons at first layer

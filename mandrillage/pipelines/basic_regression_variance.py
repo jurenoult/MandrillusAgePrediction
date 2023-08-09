@@ -81,9 +81,9 @@ class BasicRegressionVariancePipeline(BasicRegressionPipeline):
 
             # Convert the outputs to numpy arrays
             pred = outputs.squeeze().detach().cpu().numpy()
-            var = np.exp(pred[..., 1]) * 365
-            pred = pred[..., 0] * 365
-            target = targets.squeeze().cpu().numpy() * 365
+            var = np.exp(pred[..., 1]) * self.max_days
+            pred = pred[..., 0] * self.max_days
+            target = targets.squeeze().cpu().numpy() * self.max_days
 
             y_true.append(target)
             y_pred.append(pred)
