@@ -568,6 +568,8 @@ class VGGFace(nn.Module):
     def load_weights(self, path="data/pretrained/VGG_FACE.t7"):
         """Function to load luatorch pretrained
 
+        from: https://www.robots.ox.ac.uk/~vgg/software/vgg_face/
+
         Args:
             path: path for the luatorch pretrained
         """
@@ -597,6 +599,7 @@ class VGGFace(nn.Module):
                     self_layer.bias.data[...] = torch.tensor(layer.bias).view_as(
                         self_layer.bias
                     )[...]
+        print(f"Loaded model from pretrained model at path : {path}")
 
     def features(self, x):
         x = self.model(x)

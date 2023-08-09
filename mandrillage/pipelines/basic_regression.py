@@ -19,6 +19,7 @@ from mandrillage.evaluations import standard_regression_evaluation
 from mandrillage.models import RegressionModel, VGGFace, VoloBackbone
 from mandrillage.pipeline import Pipeline
 from mandrillage.utils import load, save, split_indices, create_kfold_data
+from mandrillage.losses import BMCLoss
 
 log = logging.getLogger(__name__)
 
@@ -103,7 +104,13 @@ class BasicRegressionPipeline(Pipeline):
         self.backbone = VGGFace(
             start_filters=self.vgg_start_filters, output_dim=self.vgg_output_dim
         )
-        # self.backbone = VoloBackbone()
+        if self.vgg_face_pretrained_path:
+            if os.path.exists(self.vgg_face_pretrained_path):
+                self.backbone.load_weights(self.vgg_face_pretrained_path)
+            else:
+                log.error(
+                    f"Could not find model path at {self.vgg_face_pretrained_path}"
+                )
         self.model = RegressionModel(
             self.backbone,
             input_dim=self.backbone.output_dim,
@@ -115,11 +122,21 @@ class BasicRegressionPipeline(Pipeline):
 
     def init_losses(self):
         # Losses
-        self.criterion = nn.MSELoss()
+        # self.criterion = nn.MSELoss()
+        self.criterion = BMCLoss(init_noise_sigma=1.0, device=self.device)
         self.val_criterion = nn.L1Loss()
 
     def init_optimizers(self):
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
+
+        if isinstance(self.criterion, BMCLoss):
+            self.optimizer.add_param_group(
+                {
+                    "params": self.criterion.noise_sigma,
+                    "lr": 1e-2,
+                    "name": "noise_sigma",
+                }
+            )
 
     def init_callbacks(self):
         pass
@@ -309,3 +326,4 @@ class BasicRegressionPipeline(Pipeline):
         self.regression_lin_start = self.config.model.regression_lin_start
         self.regression_stages = self.config.model.regression_stages
         self.sim_alpha = self.config.training.sim_alpha
+        self.vgg_face_pretrained_path = self.config.model.vgg_face_pretrained_path
