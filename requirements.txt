@@ -9,3 +9,4 @@ matplotlib
 seaborn
 hydra-optuna-sweeper
 mlflow
+coral-pytorch
