@@ -1,8 +1,10 @@
 import torch.nn as nn
 from collections import OrderedDict
 from coral_pytorch.layers import CoralLayer
+import timm
 import torch
 import volo
+from volo import volo_d1
 
 
 class VoloBackbone(nn.Module):
@@ -15,32 +17,13 @@ class VoloBackbone(nn.Module):
         self.base_name = base_name
         super().__init__()
 
-        base_model = volo.volo_d1(pretrained=pretrained, return_dense=True)
+        base_model = volo.volo_d1(pretrained=pretrained, return_dense=False)
         base_model.reset_classifier(num_classes=0)
-        # in_features = base_model.head.in_features
         self.backbone = base_model
         self.output_dim = 384
-        # print(f"{base_name}: {in_features}")
-
-        # # # prepare head clasifier
-        # if dims_head[0] is None:
-        #     dims_head[0] = in_features
-
-        # layers_list = []
-        # for i in range(len(dims_head) - 2):
-        #     in_dim, out_dim = dims_head[i : i + 2]
-        #     layers_list.extend(
-        #         [
-        #             nn.Linear(in_dim, out_dim),
-        #             nn.ReLU(),
-        #             nn.Dropout(0.5),
-        #         ]
-        #     )
-        # layers_list.append(nn.Linear(dims_head[-2], dims_head[-1]))
-        # self.head = nn.Sequential(*layers_list)
 
     def features(self, x):
-        x_cls, x_aux, (bbx1, bby1, bbx2, bby2) = self.forward(x)
+        x_cls = self.forward(x)
         return x_cls
 
     def forward(self, x):
