@@ -16,7 +16,7 @@ from mandrillage.dataset import (
     resample,
 )
 from mandrillage.evaluations import standard_regression_evaluation
-from mandrillage.models import RegressionModel, VGGFace
+from mandrillage.models import RegressionModel, VGGFace, VoloBackbone
 from mandrillage.pipeline import Pipeline
 from mandrillage.utils import load, save, split_indices, create_kfold_data
 
@@ -100,9 +100,10 @@ class BasicRegressionPipeline(Pipeline):
         pass
 
     def init_model(self):
-        self.backbone = VGGFace(
-            start_filters=self.vgg_start_filters, output_dim=self.vgg_output_dim
-        )
+        # self.backbone = VGGFace(
+        #     start_filters=self.vgg_start_filters, output_dim=self.vgg_output_dim
+        # )
+        self.backbone = VoloBackbone()
         self.model = RegressionModel(
             self.backbone,
             input_dim=self.backbone.output_dim,

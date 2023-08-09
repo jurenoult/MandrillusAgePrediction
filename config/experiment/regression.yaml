@@ -29,7 +29,7 @@ model:
   vgg_output_dim: 2622
 
   # Number of dense neurons at first layer
-  regression_lin_start: 2048
+  regression_lin_start: 256
   # Number of stages in the regression head.
   # Each stage divides the number of neurons by two
-  regression_stages: 6
+  regression_stages: 3
