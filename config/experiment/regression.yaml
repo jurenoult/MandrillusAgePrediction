@@ -23,6 +23,9 @@ training:
   batch_size: 16
   epochs: 100
   sim_alpha: 10
+  linear_weighting:
+    min_age_error_max: 5
+    max_age_error_max: 90
 
 model:
   vgg_face_pretrained_path: data/pretrained/VGG_FACE.t7

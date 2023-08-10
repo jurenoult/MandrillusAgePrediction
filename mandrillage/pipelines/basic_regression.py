@@ -122,8 +122,8 @@ class BasicRegressionPipeline(Pipeline):
 
     def init_losses(self):
         # Losses
-        # self.criterion = nn.MSELoss()
-        self.criterion = BMCLoss(init_noise_sigma=1.0, device=self.device)
+        self.criterion = nn.MSELoss()
+        # self.criterion = BMCLoss(init_noise_sigma=1.0, device=self.device)
         self.val_criterion = nn.L1Loss()
 
     def init_optimizers(self):

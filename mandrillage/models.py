@@ -508,82 +508,47 @@ class VGGFace(nn.Module):
     def __init__(self, start_filters=64, output_dim=2622):
         super().__init__()
 
+        self.start_filters = start_filters
+        self.output_dim = output_dim
         self.block_size = [2, 2, 3, 3, 3]
-        self.conv_1_1 = nn.Conv2d(3, 64, 3, stride=1, padding=1)
-        self.conv_1_2 = nn.Conv2d(64, 64, 3, stride=1, padding=1)
-        self.conv_2_1 = nn.Conv2d(64, 128, 3, stride=1, padding=1)
-        self.conv_2_2 = nn.Conv2d(128, 128, 3, stride=1, padding=1)
-        self.conv_3_1 = nn.Conv2d(128, 256, 3, stride=1, padding=1)
-        self.conv_3_2 = nn.Conv2d(256, 256, 3, stride=1, padding=1)
-        self.conv_3_3 = nn.Conv2d(256, 256, 3, stride=1, padding=1)
-        self.conv_4_1 = nn.Conv2d(256, 512, 3, stride=1, padding=1)
-        self.conv_4_2 = nn.Conv2d(512, 512, 3, stride=1, padding=1)
-        self.conv_4_3 = nn.Conv2d(512, 512, 3, stride=1, padding=1)
-        self.conv_5_1 = nn.Conv2d(512, 512, 3, stride=1, padding=1)
-        self.conv_5_2 = nn.Conv2d(512, 512, 3, stride=1, padding=1)
-        self.conv_5_3 = nn.Conv2d(512, 512, 3, stride=1, padding=1)
-        self.fc6 = nn.Linear(512 * 7 * 7, 4096)
-        self.fc7 = nn.Linear(4096, 4096)
-        self.fc8 = nn.Linear(4096, 2622)
-
-        # self.model = nn.Sequential(
-        #     self.conv_block(3, start_filters, kernel_size=3, zero_pad=1),
-        #     self.conv_block(start_filters, start_filters, kernel_size=3, zero_pad=1),
-        #     nn.MaxPool2d(kernel_size=(2, 2), stride=(2, 2)),
-        #     self.conv_block(
-        #         start_filters, start_filters * 2, kernel_size=3, zero_pad=1
-        #     ),
-        #     self.conv_block(
-        #         start_filters * 2, start_filters * 2, kernel_size=3, zero_pad=1
-        #     ),
-        #     nn.MaxPool2d(kernel_size=(2, 2), stride=(2, 2)),
-        #     self.conv_block(
-        #         start_filters * 2, start_filters * 4, kernel_size=3, zero_pad=1
-        #     ),
-        #     self.conv_block(
-        #         start_filters * 4, start_filters * 4, kernel_size=3, zero_pad=1
-        #     ),
-        #     self.conv_block(
-        #         start_filters * 4, start_filters * 4, kernel_size=3, zero_pad=1
-        #     ),
-        #     nn.MaxPool2d(kernel_size=(2, 2), stride=(2, 2)),
-        #     self.conv_block(
-        #         start_filters * 4, start_filters * 8, kernel_size=3, zero_pad=1
-        #     ),
-        #     self.conv_block(
-        #         start_filters * 8, start_filters * 8, kernel_size=3, zero_pad=1
-        #     ),
-        #     self.conv_block(
-        #         start_filters * 8, start_filters * 8, kernel_size=3, zero_pad=1
-        #     ),
-        #     nn.MaxPool2d(kernel_size=(2, 2), stride=(2, 2)),
-        #     self.conv_block(
-        #         start_filters * 8, start_filters * 8, kernel_size=3, zero_pad=1
-        #     ),
-        #     self.conv_block(
-        #         start_filters * 8, start_filters * 8, kernel_size=3, zero_pad=1
-        #     ),
-        #     self.conv_block(
-        #         start_filters * 8, start_filters * 8, kernel_size=3, zero_pad=1
-        #     ),
-        #     nn.MaxPool2d(kernel_size=(2, 2), stride=(2, 2)),
-        #     self.conv_block(start_filters * 8, start_filters * 64, kernel_size=7),
-        #     nn.Dropout(0.5),
-        #     self.conv_block(start_filters * 64, start_filters * 64, kernel_size=1),
-        #     nn.Dropout(0.5),
-        #     nn.Conv2d(start_filters * 64, output_dim, kernel_size=1),
-        # )
-
-        # self.output_dim = output_dim
-        self.output_dim = 2622
-
-    def conv_block(self, input_dim, output_dim, kernel_size, zero_pad=0):
-        conv = nn.Conv2d(input_dim, output_dim, kernel_size=kernel_size)
-        relu = nn.ReLU(inplace=True)
-        bn = nn.BatchNorm2d(output_dim)
-        if zero_pad > 0:
-            return nn.Sequential(conv, relu, bn, nn.ZeroPad2d(zero_pad))
-        return nn.Sequential(conv, relu, bn)
+        self.conv_1_1 = nn.Conv2d(3, start_filters, 3, stride=1, padding=1)
+        self.conv_1_2 = nn.Conv2d(start_filters, start_filters, 3, stride=1, padding=1)
+        self.conv_2_1 = nn.Conv2d(
+            start_filters, start_filters * 2, 3, stride=1, padding=1
+        )
+        self.conv_2_2 = nn.Conv2d(
+            start_filters * 2, start_filters * 2, 3, stride=1, padding=1
+        )
+        self.conv_3_1 = nn.Conv2d(
+            start_filters * 2, start_filters * 4, 3, stride=1, padding=1
+        )
+        self.conv_3_2 = nn.Conv2d(
+            start_filters * 4, start_filters * 4, 3, stride=1, padding=1
+        )
+        self.conv_3_3 = nn.Conv2d(
+            start_filters * 4, start_filters * 4, 3, stride=1, padding=1
+        )
+        self.conv_4_1 = nn.Conv2d(
+            start_filters * 4, start_filters * 8, 3, stride=1, padding=1
+        )
+        self.conv_4_2 = nn.Conv2d(
+            start_filters * 8, start_filters * 8, 3, stride=1, padding=1
+        )
+        self.conv_4_3 = nn.Conv2d(
+            start_filters * 8, start_filters * 8, 3, stride=1, padding=1
+        )
+        self.conv_5_1 = nn.Conv2d(
+            start_filters * 8, start_filters * 8, 3, stride=1, padding=1
+        )
+        self.conv_5_2 = nn.Conv2d(
+            start_filters * 8, start_filters * 8, 3, stride=1, padding=1
+        )
+        self.conv_5_3 = nn.Conv2d(
+            start_filters * 8, start_filters * 8, 3, stride=1, padding=1
+        )
+        self.fc6 = nn.Linear(start_filters * 8 * 7 * 7, start_filters * 64)
+        self.fc7 = nn.Linear(start_filters * 64, start_filters * 64)
+        self.fc8 = nn.Linear(start_filters * 64, output_dim)
 
     def load_weights(self, path="data/pretrained/VGG_FACE.t7"):
         """Function to load luatorch pretrained
@@ -593,6 +558,9 @@ class VGGFace(nn.Module):
         Args:
             path: path for the luatorch pretrained
         """
+        assert (
+            self.start_filters == 64 and self.output_dim == 2622
+        ), "You must use the correct model size to load the pretrained weight"
         model = torchfile.load(path)
         counter = 1
         block = 1
