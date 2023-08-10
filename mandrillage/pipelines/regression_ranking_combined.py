@@ -109,11 +109,15 @@ class RegressionRankingCombinedPipeline(RegressionRankingPipeline):
             val_regression_loss = 0.0
             val_ranking_loss = 0.0
             n_repeat = 1
+            val_losses = {}
 
             with torch.no_grad():
-                val_regression_loss = self.val_loss(
-                    self.val_loader, self.model, self.val_criterion, self.device
-                )
+                for val_name, val_fnct in self.val_criterions.items():
+                    val_losses[val_name] = self.val_loss(
+                        self.val_loader, self.model, val_fnct, self.device
+                    )
+                    val_losses[val_name] /= len(self.val_dataset)
+
                 val_ranking_loss = self.val_loss(
                     self.ranking_val_loader,
                     self.ranking_model,
@@ -121,14 +125,15 @@ class RegressionRankingCombinedPipeline(RegressionRankingPipeline):
                     self.device,
                     repeat=n_repeat,
                 )
-            val_regression_loss /= len(self.val_dataset)
-            val_ranking_loss /= len(self.val_dataset)
+                val_ranking_loss /= len(self.val_dataset)
 
-            if val_regression_loss < best_val:
+            val_loss = val_losses[self.watch_val_loss]
+
+            if val_loss < best_val:
                 log.info(
-                    f"Val regression loss improved from {best_val:.4f} to {val_regression_loss:.4f}"
+                    f"Val regression loss improved from {best_val:.4f} to {val_loss:.4f}"
                 )
-                best_val = val_regression_loss
+                best_val = val_loss
                 save(
                     self.model,
                     f"regression_{self.train_index}",
@@ -145,11 +150,14 @@ class RegressionRankingCombinedPipeline(RegressionRankingPipeline):
                 log.info(f"Val regression loss did not improved from {best_val:.4f}")
 
             # Print training and validation metrics
+            val_str = " - ".join(
+                [f" val_{name}: {value:.5f}" for name, value in val_losses.items()]
+            )
             log.info(
                 f"Epoch [{epoch+1}/{self.epochs}] - "
                 f"Train Regression Loss: {train_regression_loss:.5f} - "
                 f"Train Ranking Loss: {train_ranking_loss:.5f} - "
-                f"Val Regression Loss: {(val_regression_loss * self.max_days):.5f} - "
+                f"{val_str} - "
                 f"Val Ranking Loss: {val_ranking_loss:.5f}"
             )
 

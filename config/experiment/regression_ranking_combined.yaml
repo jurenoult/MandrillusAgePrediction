@@ -26,10 +26,14 @@ training:
   epochs: 100
   ranking_learning_rate: 0.0001
   ranking_alpha: 0.00001
-  sim_alpha: 10
+  sim_alpha: 1
+  linear_weighting:
+    min_age_error_max: 5
+    max_age_error_max: 30
 
 model:
-  vgg_start_filters: 16
+  pretrained: data/pretrained/VGG_FACE.t7
+  vgg_start_filters: 64
   vgg_output_dim: 2622
 
   # Number of dense neurons at first layer
