@@ -22,13 +22,13 @@ training:
   learning_rate: 0.0001
   batch_size: 16
   epochs: 100
-  sim_alpha: 10
+  sim_alpha: 1
   linear_weighting:
     min_age_error_max: 5
     max_age_error_max: 90
 
 model:
-  vgg_face_pretrained_path: data/pretrained/VGG_FACE.t7
+  pretrained: data/pretrained/VGG_FACE.t7
   vgg_start_filters: 64
   vgg_output_dim: 2622
 

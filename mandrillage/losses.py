@@ -4,6 +4,64 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+class ScalerLoss(nn.Module):
+    def __init__(self, loss, weight):
+        super(ScalerLoss, self).__init__()
+        self.loss = loss
+        self.weight = weight
+
+    def forward(self, y_pred, y_true):
+        return torch.mean(self.loss(y_pred, y_true) * self.weight(y_pred, y_true))
+
+
+class ExponentialWeighting(nn.Module):
+    def __init__(self):
+        super(ExponentialWeighting, self).__init__()
+        self.scale = torch.nn.Parameter(torch.tensor(3.0))
+        self.a = torch.nn.Parameter(torch.tensor(0.5))
+        self.mse = nn.MSELoss()
+
+    def forward(self, y_pred, y_true):
+        return self.a * torch.exp(-self.scale * y_true)
+
+
+class LinearWeighting(nn.Module):
+    def __init__(self, min_error, max_error, max_days, error_function):
+        super(LinearWeighting, self).__init__()
+
+        # Goal is to have the same error value with min_error at zero days
+        # and max_error at max days
+
+        zero_days = torch.tensor(0.0)
+        max_days = torch.tensor(float(max_days))
+        min_error = torch.tensor(float(min_error))
+        max_error = torch.tensor(float(max_days - max_error))
+
+        # Compute both error
+        low_end_error = error_function(min_error, zero_days)
+        high_end_error = error_function(max_error, max_days)
+
+        low_end_error = low_end_error.numpy()
+        high_end_error = high_end_error.numpy()
+
+        # This is the factor we need to multiply high_end_error by to obtain low_end_error
+        self.error_ratio = low_end_error / high_end_error
+
+        # We must solve the linear equation system y = ax + b
+        # 1 = a * 0 + b => b = 1
+        self.b = 1
+        # error_ratio = a * 1 + b
+        # error_ratio - b = a
+        self.a = self.error_ratio - 1
+
+    def get_weight(self, x):
+        weight = self.a * x + self.b
+        return weight
+
+    def forward(self, y_pred, y_true):
+        return self.get_weight(y_true)
+
+
 def bmc_loss(pred, target, noise_var, device):
     """Compute the Balanced MSE Loss (BMC) between `pred` and the ground truth `targets`.
     Args:

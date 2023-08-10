@@ -14,12 +14,14 @@ from mandrillage.dataset import (
     read_dataset,
     MandrillSimilarityImageDataset,
     resample,
+    AugmentedDataset,
+    AugmentedSimilarityDataset,
 )
 from mandrillage.evaluations import standard_regression_evaluation
 from mandrillage.models import RegressionModel, VGGFace, VoloBackbone
 from mandrillage.pipeline import Pipeline
 from mandrillage.utils import load, save, split_indices, create_kfold_data
-from mandrillage.losses import BMCLoss
+from mandrillage.losses import BMCLoss, ScalerLoss, LinearWeighting
 
 log = logging.getLogger(__name__)
 
@@ -74,6 +76,8 @@ class BasicRegressionPipeline(Pipeline):
             training=True,
         )
 
+        self.train_dataset = AugmentedDataset(self.train_dataset)
+
         self.train_similarity_dataset = MandrillSimilarityImageDataset(
             root_dir=self.dataset_images_path,
             dataframe=self.data,
@@ -82,6 +86,10 @@ class BasicRegressionPipeline(Pipeline):
             individuals_ids=self.train_indices,
         )
         self.train_similarity_dataset.set_images(self.train_dataset.images)
+
+        self.train_similarity_dataset = AugmentedSimilarityDataset(
+            self.train_similarity_dataset
+        )
 
         self.val_dataset = MandrillImageDataset(
             root_dir=self.dataset_images_path,
@@ -121,10 +129,28 @@ class BasicRegressionPipeline(Pipeline):
         self.model = self.model.to(self.device)
 
     def init_losses(self):
+        self.mse_loss_weighting = LinearWeighting(
+            min_error=self.linear_weighting.min_age_error_max,
+            max_error=self.linear_weighting.max_age_error_max,
+            max_days=self.max_days,
+            error_function=nn.MSELoss(),
+        )
         # Losses
-        self.criterion = nn.MSELoss()
+        self.criterion = ScalerLoss(nn.MSELoss(), self.mse_loss_weighting)
+
+        self.l1_loss_weighting = LinearWeighting(
+            min_error=self.linear_weighting.min_age_error_max,
+            max_error=self.linear_weighting.max_age_error_max,
+            max_days=self.max_days,
+            error_function=nn.L1Loss(),
+        )
         # self.criterion = BMCLoss(init_noise_sigma=1.0, device=self.device)
-        self.val_criterion = nn.L1Loss()
+        self.val_criterions = {
+            "L1": nn.L1Loss(),
+            "L1 scaled": ScalerLoss(nn.L1Loss(), self.l1_loss_weighting),
+        }
+
+        self.watch_val_loss = "L1 scaled"
 
     def init_optimizers(self):
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
@@ -173,21 +199,25 @@ class BasicRegressionPipeline(Pipeline):
                 )
 
                 ### SIMILARITY LOSS
-                x1, x2 = next(
-                    iter(
-                        self.train_similarity_loader,
+                if self.sim_alpha > 0:
+                    x1, x2 = next(
+                        iter(
+                            self.train_similarity_loader,
+                        )
                     )
-                )
-                x1, x2 = self.xy_to_device(x1, x2, self.device)
-                y1, y2 = self.model(x1), self.model(x2)
-                sim_loss = self.criterion(y1, y2)
+                    x1, x2 = self.xy_to_device(x1, x2, self.device)
+                    y1, y2 = self.model(x1), self.model(x2)
+                    sim_loss = self.criterion(y1, y2)
 
-                loss = reg_loss + self.sim_alpha * sim_loss
+                    loss = reg_loss + self.sim_alpha * sim_loss
+                    train_sim_loss += sim_loss.item() * self.get_size(x1)
+                else:
+                    loss = reg_loss
+
                 # Backward pass and optimization
                 loss.backward()
                 self.optimizer.step()
 
-                train_sim_loss += sim_loss.item() * self.get_size(x1)
                 train_loss += reg_loss.item() * reg_size
 
                 n_samples = self.batch_size * (i + 1)
@@ -199,16 +229,20 @@ class BasicRegressionPipeline(Pipeline):
 
             # Validation loop
             self.model.eval()  # Set the model to evaluation mode
-            val_loss = 0.0
+            val_losses = {}
 
             with torch.no_grad():
-                val_loss = self.val_loss(
-                    self.val_loader, self.model, self.val_criterion, self.device
-                )
-            val_loss /= len(self.val_dataset)
+                for val_name, val_fnct in self.val_criterions.items():
+                    val_losses[val_name] = self.val_loss(
+                        self.val_loader, self.model, val_fnct, self.device
+                    )
+                    val_losses[val_name] /= len(self.val_dataset)
 
+            val_loss = val_losses[self.watch_val_loss]
             if val_loss < best_val:
-                log.info(f"Val loss improved from {best_val:.4f} to {val_loss:.4f}")
+                log.info(
+                    f"Val loss {self.watch_val_loss} improved from {best_val:.4f} to {val_loss:.4f}"
+                )
                 best_val = val_loss
                 save(
                     self.model,
@@ -220,10 +254,13 @@ class BasicRegressionPipeline(Pipeline):
                 log.info(f"Val loss did not improved from {best_val:.4f}")
 
             # Print training and validation metrics
+            val_str = " - ".join(
+                [f" val_{name}: {value:.5f}" for name, value in val_losses.items()]
+            )
             log.info(
                 f"Epoch [{epoch+1}/{self.epochs}] - "
                 f"Train Loss: {train_loss:.5f} - "
-                f"Val Loss: {val_loss:.5f}"
+                f"{val_str}"
             )
 
     def predict_from_dataset(self, x):
@@ -326,4 +363,6 @@ class BasicRegressionPipeline(Pipeline):
         self.regression_lin_start = self.config.model.regression_lin_start
         self.regression_stages = self.config.model.regression_stages
         self.sim_alpha = self.config.training.sim_alpha
-        self.vgg_face_pretrained_path = self.config.model.vgg_face_pretrained_path
+        self.vgg_face_pretrained_path = self.config.model.pretrained
+
+        self.linear_weighting = self.config.training.linear_weighting
