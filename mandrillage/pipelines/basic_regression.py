@@ -52,6 +52,7 @@ class BasicRegressionPipeline(Pipeline):
             filter_certainty=self.config.dataset.dob_certain_only,
             max_age=self.max_days,
             max_dob_error=self.max_dob_error,
+            sex=self.sex,
         )
 
         # self.data = resample(self.data, bins=12)
@@ -76,7 +77,7 @@ class BasicRegressionPipeline(Pipeline):
             training=True,
         )
 
-        self.train_dataset = AugmentedDataset(self.train_dataset)
+        # self.train_dataset = AugmentedDataset(self.train_dataset)
 
         self.train_similarity_dataset = MandrillSimilarityImageDataset(
             root_dir=self.dataset_images_path,
@@ -87,9 +88,9 @@ class BasicRegressionPipeline(Pipeline):
         )
         self.train_similarity_dataset.set_images(self.train_dataset.images)
 
-        self.train_similarity_dataset = AugmentedSimilarityDataset(
-            self.train_similarity_dataset
-        )
+        # self.train_similarity_dataset = AugmentedSimilarityDataset(
+        #     self.train_similarity_dataset
+        # )
 
         self.val_dataset = MandrillImageDataset(
             root_dir=self.dataset_images_path,
@@ -163,6 +164,15 @@ class BasicRegressionPipeline(Pipeline):
                     "name": "noise_sigma",
                 }
             )
+        # if isinstance(self.criterion, ScalerLoss):
+        #     if isinstance(self.criterion.weight, LinearWeighting):
+        #         self.optimizer.add_param_group(
+        #             {
+        #                 "params": self.criterion.weight._a,
+        #                 "lr": 1e-2,
+        #                 "name": "weight_slope",
+        #             }
+        #         )
 
     def init_callbacks(self):
         pass
@@ -214,6 +224,8 @@ class BasicRegressionPipeline(Pipeline):
                 else:
                     loss = reg_loss
 
+                # loss += self.criterion.weight.a * 0.004
+
                 # Backward pass and optimization
                 loss.backward()
                 self.optimizer.step()
@@ -222,7 +234,7 @@ class BasicRegressionPipeline(Pipeline):
 
                 n_samples = self.batch_size * (i + 1)
                 pbar.set_description(
-                    f"Regression train loss: {(train_loss/n_samples):.5f} - Similarity train loss: {(train_sim_loss/n_samples):.5f}"
+                    f"Regression train loss: {(train_loss/n_samples):.5f} - Similarity train loss: {(train_sim_loss/n_samples):.5f} - Weight slope : {self.criterion.weight.a}"
                 )
 
             train_loss /= len(self.train_dataset)
@@ -342,14 +354,14 @@ class BasicRegressionPipeline(Pipeline):
             np.array(y_true), np.array(y_pred), self.name, 0, self.max_days
         )
 
-        log.info("Performing inference per individual")
-        self.predict_per_individual(self.val_dataset)
-
         scores_path = os.path.join(self.output_dir, f"scores_{self.train_index}.json")
         with open(scores_path, "w") as file:
             import json
 
             file.write(json.dumps(results, cls=NumpyEncoder))
+
+        log.info("Performing inference per individual")
+        self.predict_per_individual(self.val_dataset)
 
         return results[self.name][self.name + "_regression"][
             self.name + "_regression_mae"

@@ -32,6 +32,8 @@ class Pipeline(object):
         self.dataset_images_path = os.path.join(
             self.config.dataset.basepath, self.config.dataset.images
         )
+        self.sex = self.config.dataset.sex
+        self.sex = None if self.sex == "" else self.sex
 
         self.learning_rate = self.config.training.learning_rate
         self.batch_size = self.config.training.batch_size

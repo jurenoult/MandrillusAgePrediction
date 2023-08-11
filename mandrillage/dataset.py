@@ -51,8 +51,30 @@ def filter_dob_errors(data):
     return data[data["age"] >= 0]
 
 
-def read_dataset(path, filter_dob_error=True, filter_certainty=False, max_age=0, max_dob_error=0):
-    data = pd.read_csv(path, dtype={"shootdate": str})
+def filter_by_sex(data, sex):
+    return data[data["sex"] == sex]
+
+
+def read_dataset(
+    path,
+    filter_dob_error=True,
+    filter_certainty=False,
+    max_age=0,
+    max_dob_error=0,
+    sex=None,
+):
+    data = pd.read_csv(
+        path,
+        dtype={
+            "ShootDate": str,
+            "shootdate": str,
+            "Shootdate": str,
+            "dob": str,
+        },
+    )
+    # All columns to lowercase
+    data.columns = data.columns.str.lower()
+
     data["shootdate"].replace("nan", np.nan, inplace=True)
     data["shootdate"].replace("#N/D", np.nan, inplace=True)
     data["dob"].replace("#N/D", np.nan, inplace=True)
@@ -60,6 +82,11 @@ def read_dataset(path, filter_dob_error=True, filter_certainty=False, max_age=0,
     data = data.dropna()
     data["age"] = data.apply(compute_age, axis=1)
 
+    if sex:
+        assert (
+            sex == "f" or sex == "m"
+        ), "Expected sex to be either 'f' (female) or 'm' (male)"
+        data = filter_by_sex(data, sex)
     if filter_certainty:
         data = filter_by_certainty(data, max_dob_error)
     if filter_dob_error:
@@ -96,8 +123,8 @@ import albumentations as A
 AUGMENTATION_PIPELINE = A.Compose(
     [
         # A.Flip(p=0.5),
-        A.ShiftScaleRotate(p=0.5, shift_limit=0.00, scale_limit=0.1, rotate_limit=180),
-        A.ColorJitter(p=0.5),
+        A.ShiftScaleRotate(p=0.5, shift_limit=0.00, scale_limit=0.2, rotate_limit=180),
+        # A.ColorJitter(p=0.5),
         A.OneOf([A.Blur(p=1.0), A.Defocus(p=1.0)], p=0.5),
     ],
     p=0.5,
