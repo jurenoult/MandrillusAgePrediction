@@ -130,28 +130,36 @@ class BasicRegressionPipeline(Pipeline):
         self.model = self.model.to(self.device)
 
     def init_losses(self):
-        self.mse_loss_weighting = LinearWeighting(
-            min_error=self.linear_weighting.min_age_error_max,
-            max_error=self.linear_weighting.max_age_error_max,
-            max_days=self.max_days,
-            error_function=nn.MSELoss(),
-        )
+        train_error_function = nn.MSELoss()
+        val_error_function = nn.L1Loss()
+
+        self.criterion = train_error_function
+        self.val_criterions = {"L1": val_error_function}
+        self.watch_val_loss = "L1"
+
         # Losses
-        self.criterion = ScalerLoss(nn.MSELoss(), self.mse_loss_weighting)
+        if self.linear_weighting:
+            self.mse_loss_weighting = LinearWeighting(
+                min_error=self.linear_weighting.min_age_error_max,
+                max_error=self.linear_weighting.max_age_error_max,
+                max_days=self.max_days,
+                error_function=train_error_function,
+            )
+            self.criterion = ScalerLoss(train_error_function, self.mse_loss_weighting)
 
-        self.l1_loss_weighting = LinearWeighting(
-            min_error=self.linear_weighting.min_age_error_max,
-            max_error=self.linear_weighting.max_age_error_max,
-            max_days=self.max_days,
-            error_function=nn.L1Loss(),
-        )
-        # self.criterion = BMCLoss(init_noise_sigma=1.0, device=self.device)
-        self.val_criterions = {
-            "L1": nn.L1Loss(),
-            "L1 scaled": ScalerLoss(nn.L1Loss(), self.l1_loss_weighting),
-        }
+            self.l1_loss_weighting = LinearWeighting(
+                min_error=self.linear_weighting.min_age_error_max,
+                max_error=self.linear_weighting.max_age_error_max,
+                max_days=self.max_days,
+                error_function=val_error_function,
+            )
 
-        self.watch_val_loss = "L1 scaled"
+            self.val_criterions = {
+                "L1": val_error_function,
+                "L1 scaled": ScalerLoss(val_error_function, self.l1_loss_weighting),
+            }
+
+            self.watch_val_loss = "L1 scaled"
 
     def init_optimizers(self):
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
@@ -164,15 +172,6 @@ class BasicRegressionPipeline(Pipeline):
                     "name": "noise_sigma",
                 }
             )
-        # if isinstance(self.criterion, ScalerLoss):
-        #     if isinstance(self.criterion.weight, LinearWeighting):
-        #         self.optimizer.add_param_group(
-        #             {
-        #                 "params": self.criterion.weight._a,
-        #                 "lr": 1e-2,
-        #                 "name": "weight_slope",
-        #             }
-        #         )
 
     def init_callbacks(self):
         pass
