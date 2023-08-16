@@ -53,21 +53,13 @@ class LinearWeighting(nn.Module):
         # error_ratio = a * 1 + b
         # error_ratio - b = a
         self._a = self.error_ratio - 1
-        # self._a = 1 - self.error_ratio
-
-        # self._a = torch.nn.Parameter(torch.tensor(self.error_ratio))
-        # self.activation = nn.Sigmoid()
 
     @property
     def a(self):
-        # return self.activation(self._a)
         return self._a
-        # The easy solution is to have a = 1 which in turn will give a weight of zero
-        # However if we add the weight to the loss, a=1 is a penality
 
     def get_weight(self, x):
         weight = self.a * x + self.b
-        # weight = 1 - self.a * x**2
         return weight
 
     def forward(self, y_pred, y_true):
