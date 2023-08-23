@@ -77,7 +77,7 @@ class BasicRegressionPipeline(Pipeline):
             training=True,
         )
 
-        # self.train_dataset = AugmentedDataset(self.train_dataset)
+        self.train_dataset = AugmentedDataset(self.train_dataset)
 
         self.train_similarity_dataset = MandrillSimilarityImageDataset(
             root_dir=self.dataset_images_path,
@@ -88,9 +88,9 @@ class BasicRegressionPipeline(Pipeline):
         )
         self.train_similarity_dataset.set_images(self.train_dataset.images)
 
-        # self.train_similarity_dataset = AugmentedSimilarityDataset(
-        #     self.train_similarity_dataset
-        # )
+        self.train_similarity_dataset = AugmentedSimilarityDataset(
+            self.train_similarity_dataset
+        )
 
         self.val_dataset = MandrillImageDataset(
             root_dir=self.dataset_images_path,
@@ -191,6 +191,20 @@ class BasicRegressionPipeline(Pipeline):
                 exp_name=self.name,
                 output_dir=self.output_dir,
             )
+
+        # Find best lr stuff
+        # find_lr = False
+        # if find_lr:
+        #     from torch_lr_finder import LRFinder
+
+        #     lr_finder = LRFinder(
+        #         self.model, self.optimizer, self.criterion, device=self.device
+        #     )
+        #     lr_finder.range_test(
+        #         self.train_loader, num_iter=300, start_lr=1e-7, end_lr=100
+        #     )
+        #     lr_finder.plot()  # to inspect the loss-learning rate graph
+        #     lr_finder.reset()  # to reset the model and optimizer to their initial state
 
         # Training loop
         best_val = np.inf
