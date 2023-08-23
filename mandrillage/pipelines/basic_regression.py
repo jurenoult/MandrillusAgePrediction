@@ -18,7 +18,7 @@ from mandrillage.dataset import (
     AugmentedSimilarityDataset,
 )
 from mandrillage.evaluations import standard_regression_evaluation
-from mandrillage.models import RegressionModel, VGGFace, VoloBackbone
+from mandrillage.models import RegressionModel, VGGFace, VoloBackbone, CoAtNetBackbone
 from mandrillage.pipeline import Pipeline
 from mandrillage.utils import load, save, split_indices, create_kfold_data
 from mandrillage.losses import BMCLoss, ScalerLoss, LinearWeighting
@@ -110,16 +110,18 @@ class BasicRegressionPipeline(Pipeline):
         pass
 
     def init_model(self):
-        self.backbone = VGGFace(
-            start_filters=self.vgg_start_filters, output_dim=self.vgg_output_dim
-        )
-        if self.vgg_face_pretrained_path:
-            if os.path.exists(self.vgg_face_pretrained_path):
-                self.backbone.load_weights(self.vgg_face_pretrained_path)
-            else:
-                log.error(
-                    f"Could not find model path at {self.vgg_face_pretrained_path}"
-                )
+        # self.backbone = VGGFace(
+        #     start_filters=self.vgg_start_filters, output_dim=self.vgg_output_dim
+        # )
+        # if self.vgg_face_pretrained_path:
+        #     if os.path.exists(self.vgg_face_pretrained_path):
+        #         self.backbone.load_weights(self.vgg_face_pretrained_path)
+        #     else:
+        #         log.error(
+        #             f"Could not find model path at {self.vgg_face_pretrained_path}"
+        #         )
+
+        self.backbone = CoAtNetBackbone(output_dim=1024)
         self.model = RegressionModel(
             self.backbone,
             input_dim=self.backbone.output_dim,
