@@ -122,9 +122,9 @@ import albumentations as A
 
 AUGMENTATION_PIPELINE = A.Compose(
     [
-        # A.Flip(p=0.5),
-        A.ShiftScaleRotate(p=0.5, shift_limit=0.00, scale_limit=0.2, rotate_limit=180),
-        # A.ColorJitter(p=0.5),
+        A.Flip(p=0.5),
+        A.ShiftScaleRotate(p=0.5, shift_limit=0.20, scale_limit=0.5, rotate_limit=180),
+        A.ColorJitter(p=0.5),
         A.OneOf([A.Blur(p=1.0), A.Defocus(p=1.0)], p=0.5),
     ],
     p=0.5,
@@ -183,10 +183,10 @@ class MandrillImageDataset(Dataset):
         self.max_nbins = max_nbins
         self.training = training
 
-        if len(individuals_ids) == 0:
-            print("No individuals data specified, using all dataset")
-            raise NotImplementedError
-        else:
+        if len(individuals_ids) != 0:
+            #     print("No individuals data specified, using all dataset")
+            #     raise NotImplementedError
+            # else:
             # Filter dataframe with id array
             self.df = self.df[self.df["id"].isin(individuals_ids)]
             self.df.reset_index(drop=True, inplace=True)
@@ -220,15 +220,16 @@ class MandrillImageDataset(Dataset):
             f"Partitions size distribution: {', '.join([str(len(x)) for x in self.age_partitions])}"
         )
 
-    def load_photo(self, row):
+    def load_photo(self, row, normalize=True):
         image_path = self.photo_path(row)
         image = cv2.imread(image_path)
         if image.shape[0:2] != self.img_size:
             image = cv2.resize(image, self.img_size, interpolation=cv2.INTER_AREA)
-        image = image.astype(np.float32) / 255.0
 
         # Normalization
-        image = (image - image.min()) / image.ptp()
+        if normalize:
+            image = image.astype(np.float32) / 255.0
+            image = (image - image.min()) / image.ptp()
 
         return image
 
