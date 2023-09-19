@@ -132,7 +132,7 @@ class BasicRegressionPipeline(Pipeline):
         self.model = self.model.to(self.device)
 
     def init_losses(self):
-        train_error_function = nn.MSELoss()
+        train_error_function = nn.L1Loss()
         val_error_function = nn.L1Loss()
 
         self.criterion = train_error_function
