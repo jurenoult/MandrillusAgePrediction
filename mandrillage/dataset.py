@@ -123,18 +123,18 @@ import albumentations as A
 AUGMENTATION_PIPELINE = A.Compose(
     [
         # A.Flip(p=0.5),
-        A.ShiftScaleRotate(
-            p=0.5,
-            shift_limit=0.0,
-            scale_limit=0.5,
-            rotate_limit=0,
-            border_mode=cv2.BORDER_CONSTANT,
-        ),
-        A.OneOf(
-            [A.Blur(blur_limit=5, p=1.0), A.Defocus(alias_blur=(0.1, 0.2), p=1.0)],
-            p=0.5,
-        ),
-        A.CoarseDropout(max_holes=1, max_height=64, max_width=64, min_holes=1),
+        # A.ShiftScaleRotate(
+        #     p=0.5,
+        #     shift_limit=0.0,
+        #     scale_limit=0.5,
+        #     rotate_limit=0,
+        #     border_mode=cv2.BORDER_CONSTANT,
+        # ),
+        # A.OneOf(
+        #     [A.Blur(blur_limit=5, p=1.0), A.Defocus(alias_blur=(0.1, 0.2), p=1.0)],
+        #     p=0.5,
+        # ),
+        # A.CoarseDropout(max_holes=1, max_height=64, max_width=64, min_holes=1),
     ],
     p=0.5,
 )

@@ -215,7 +215,9 @@ class FeatureClassificationModel(nn.Module):
         x1, x2 = x
         z1 = self.get_z(x1)
         z2 = self.get_z(x2)
-        z = torch.cat([z1, z2], axis=-1)
+
+        # z = torch.cat([z1, z2], axis=-1)
+        z = torch.sub(z1, z2)
         if self.blocks:
             z = self.blocks(z)
         z = self.age_gap(z)
