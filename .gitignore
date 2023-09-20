@@ -6,3 +6,5 @@ data
 output
 outputs
 logs
+train_margin.png
+val_margin.png

@@ -4,6 +4,93 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+class FeatureSimilarityLoss(nn.Module):
+    def __init__(self, eps=1e-9):
+        super(FeatureSimilarityLoss, self).__init__()
+
+    def forward(self, x1, x2):
+        # x1 = F.normalize(x1, p=2, dim=1)
+        # x2 = F.normalize(x2, p=2, dim=1)
+        distance = F.pairwise_distance(x1, x2, keepdim=True)
+        loss = torch.mean(distance)
+        return loss
+
+
+class AdaptiveMarginLoss(nn.Module):
+    def __init__(self, min_days_error, max_days_error, max_days):
+        super(AdaptiveMarginLoss, self).__init__()
+        # Min age is 0 and max age is 1
+
+        self.min_error = min_days_error / max_days
+        self.max_error = max_days_error / max_days
+        self.error_ratio = self.max_error / self.min_error
+
+        self.b = self.min_error
+        self.a = self.max_error - self.b
+
+        self.loss = nn.L1Loss(reduction="none")
+        self.store_values = False
+        self.stored_values = []
+
+        self.weight_b = self.error_ratio
+        self.weight_a = 1 - self.weight_b
+
+    def toggle_store_values(self):
+        self.store_values = not self.store_values
+        if not self.store_values:
+            self.stored_values = []
+
+    def display_stored_values(self, name):
+        import matplotlib.pyplot as plt
+        import os
+
+        # Create a figure with margin function
+        fig, axs = plt.subplots(3, 1, figsize=(16, 10))
+        axs[0].plot([0, 1], [self.min_error, self.max_error])
+        axs[1].plot([0, 1], [self.get_weight(0), self.get_weight(1)])
+        axs[2].plot([0, 1], [0, 1])
+
+        # For each batch stored
+        for errors, weights, preds, ys_true in self.stored_values:
+            for i in range(errors.shape[0]):
+                error, weight, pred, y_true = (
+                    errors[i].detach().cpu().numpy(),
+                    weights[i].detach().cpu().numpy(),
+                    preds[i].detach().cpu().numpy(),
+                    ys_true[i].detach().cpu().numpy(),
+                )
+                # Plot for the given age y_true, the distance to the margin (the error)
+                axs[0].scatter(y_true, error)
+                axs[1].scatter(y_true, weight)
+                axs[2].scatter(y_true, pred)
+        plt.savefig(f"{name}.png")
+        plt.close()
+
+    def get_margin(self, x):
+        return self.a * x + self.b
+
+    def get_weight(self, x):
+        return self.weight_a * x + self.weight_b
+
+    def forward(self, y_pred, y_true):
+        # Compute l1 loss
+        error = self.loss(y_pred, y_true)
+        # Get the threshold margin for all value
+        margin = self.get_margin(y_true)
+        # Compute distance to margin
+        distance = error - margin
+
+        weight = self.get_weight(y_true)
+        if self.store_values:
+            self.stored_values.append((error, error * weight, y_pred, y_true))
+
+        # Only penalize samples that are not within the margin distance
+        loss = torch.mean(
+            torch.max(distance * weight, torch.tensor(0.0).to(y_pred.device))
+        )
+        return loss
+
+
 class ScalerLoss(nn.Module):
     def __init__(self, loss, weight):
         super(ScalerLoss, self).__init__()

@@ -126,7 +126,7 @@ AUGMENTATION_PIPELINE = A.Compose(
         # A.ShiftScaleRotate(
         #     p=0.5,
         #     shift_limit=0.0,
-        #     scale_limit=0.5,
+        #     scale_limit=0.95,
         #     rotate_limit=0,
         #     border_mode=cv2.BORDER_CONSTANT,
         # ),
@@ -134,7 +134,7 @@ AUGMENTATION_PIPELINE = A.Compose(
         #     [A.Blur(blur_limit=5, p=1.0), A.Defocus(alias_blur=(0.1, 0.2), p=1.0)],
         #     p=0.5,
         # ),
-        # A.CoarseDropout(max_holes=1, max_height=64, max_width=64, min_holes=1),
+        # A.CoarseDropout(max_holes=3, max_height=16, max_width=16, min_holes=1),
     ],
     p=0.5,
 )
@@ -238,7 +238,7 @@ class MandrillImageDataset(Dataset):
         # Normalization
         if normalize:
             image = image.astype(np.float32) / 255.0
-            image = (image - image.min()) / image.ptp()
+            # image = (image - image.min()) / image.ptp()
 
         return image
 

@@ -12,20 +12,21 @@ dataset:
   basepath: "data/db2/"
   metadata: "MFD_metadatas.csv"
   images: "Images"
-  max_age: 1
-  dob_certain_only: True
-  max_dob_error: 0
+  max_age: 3
+  dob_certain_only: False
+  max_dob_error: 15
   in_memory: True
   train_ratio: 0.8
   n_classes: 3
   same_age_gap: 0
+  sex: null
 
 training:
-  learning_rate: 0.0001
+  learning_rate: 0.00001
   batch_size: 16
   epochs: 100
-  ranking_learning_rate: 0.0001
-  ranking_alpha: 0.00001
+  ranking_learning_rate: 0.00001
+  ranking_alpha: 0.01
   sim_alpha: 1
   linear_weighting:
     min_age_error_max: 5

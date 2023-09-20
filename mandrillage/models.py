@@ -193,7 +193,8 @@ class FeatureClassificationModel(nn.Module):
         self.cnn_backbone = cnn_backbone
         self.blocks = None
 
-        previous_feature_size = n_input * input_dim
+        # previous_feature_size = n_input * input_dim
+        previous_feature_size = input_dim
         current_feature_size = lin_start
         last_feature_size = previous_feature_size
         lin_layers, last_feature_size = build_layers(
@@ -551,6 +552,7 @@ class VGGFace(nn.Module):
         self.fc6 = nn.Linear(start_filters * 8 * 7 * 7, start_filters * 64)
         self.fc7 = nn.Linear(start_filters * 64, start_filters * 64)
         self.fc8 = nn.Linear(start_filters * 64, output_dim)
+        self.create_bn()
 
     def load_weights(self, path="data/pretrained/VGG_FACE.t7"):
         """Function to load luatorch pretrained
@@ -591,33 +593,48 @@ class VGGFace(nn.Module):
                     )[...]
         print(f"Loaded model from pretrained model at path : {path}")
 
+    def create_bn(self):
+        self.bn_1_1 = nn.BatchNorm2d(self.start_filters)
+        self.bn_1_2 = nn.BatchNorm2d(self.start_filters)
+        self.bn_2_1 = nn.BatchNorm2d(self.start_filters * 2)
+        self.bn_2_2 = nn.BatchNorm2d(self.start_filters * 2)
+        self.bn_3_1 = nn.BatchNorm2d(self.start_filters * 4)
+        self.bn_3_2 = nn.BatchNorm2d(self.start_filters * 4)
+        self.bn_3_3 = nn.BatchNorm2d(self.start_filters * 4)
+        self.bn_4_1 = nn.BatchNorm2d(self.start_filters * 8)
+        self.bn_4_2 = nn.BatchNorm2d(self.start_filters * 8)
+        self.bn_4_3 = nn.BatchNorm2d(self.start_filters * 8)
+        self.bn_5_1 = nn.BatchNorm2d(self.start_filters * 8)
+        self.bn_5_2 = nn.BatchNorm2d(self.start_filters * 8)
+        self.bn_5_3 = nn.BatchNorm2d(self.start_filters * 8)
+        self.bn_6 = nn.BatchNorm1d(self.start_filters * 64)
+        self.bn_7 = nn.BatchNorm1d(self.start_filters * 64)
+
     def features(self, x):
-        x = F.relu(self.conv_1_1(x))
-        x = F.relu(self.conv_1_2(x))
+        x = self.bn_1_1(F.relu(self.conv_1_1(x)))
+        x = self.bn_1_2(F.relu(self.conv_1_2(x)))
         x = F.max_pool2d(x, 2, 2)
-        x = F.relu(self.conv_2_1(x))
-        x = F.relu(self.conv_2_2(x))
+        x = self.bn_2_1(F.relu(self.conv_2_1(x)))
+        x = self.bn_2_2(F.relu(self.conv_2_2(x)))
         x = F.max_pool2d(x, 2, 2)
-        x = F.relu(self.conv_3_1(x))
-        x = F.relu(self.conv_3_2(x))
-        x = F.relu(self.conv_3_3(x))
+        x = self.bn_3_1(F.relu(self.conv_3_1(x)))
+        x = self.bn_3_2(F.relu(self.conv_3_2(x)))
+        x = self.bn_3_3(F.relu(self.conv_3_3(x)))
         x = F.max_pool2d(x, 2, 2)
-        x = F.relu(self.conv_4_1(x))
-        x = F.relu(self.conv_4_2(x))
-        x = F.relu(self.conv_4_3(x))
+        x = self.bn_4_1(F.relu(self.conv_4_1(x)))
+        x = self.bn_4_2(F.relu(self.conv_4_2(x)))
+        x = self.bn_4_3(F.relu(self.conv_4_3(x)))
         x = F.max_pool2d(x, 2, 2)
-        x = F.relu(self.conv_5_1(x))
-        x = F.relu(self.conv_5_2(x))
-        x = F.relu(self.conv_5_3(x))
+        x = self.bn_5_1(F.relu(self.conv_5_1(x)))
+        x = self.bn_5_2(F.relu(self.conv_5_2(x)))
+        x = self.bn_5_3(F.relu(self.conv_5_3(x)))
         x = F.max_pool2d(x, 2, 2)
         x = x.view(x.size(0), -1)
-        x = F.relu(self.fc6(x))
+        x = self.bn_6(F.relu(self.fc6(x)))
         x = F.dropout(x, 0.5, self.training)
-        x = F.relu(self.fc7(x))
+        x = self.bn_7(F.relu(self.fc7(x)))
         x = F.dropout(x, 0.5, self.training)
         x = self.fc8(x)
-
-        # x = self.model(x)
 
         x = torch.flatten(x, start_dim=1)
         return x

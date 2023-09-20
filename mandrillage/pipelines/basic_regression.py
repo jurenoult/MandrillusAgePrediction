@@ -21,7 +21,13 @@ from mandrillage.evaluations import standard_regression_evaluation
 from mandrillage.models import RegressionModel, VGGFace, VoloBackbone, CoAtNetBackbone
 from mandrillage.pipeline import Pipeline
 from mandrillage.utils import load, save, split_indices, create_kfold_data
-from mandrillage.losses import BMCLoss, ScalerLoss, LinearWeighting
+from mandrillage.losses import (
+    BMCLoss,
+    ScalerLoss,
+    LinearWeighting,
+    AdaptiveMarginLoss,
+    FeatureSimilarityLoss,
+)
 
 log = logging.getLogger(__name__)
 
@@ -132,11 +138,23 @@ class BasicRegressionPipeline(Pipeline):
         self.model = self.model.to(self.device)
 
     def init_losses(self):
-        train_error_function = nn.L1Loss()
+        # train_error_function = nn.MSELoss()
+        # val_error_function = nn.L1Loss()
+
+        train_error_function = AdaptiveMarginLoss(
+            min_days_error=5, max_days_error=30, max_days=self.max_days
+        )
+        self.sim_criterion = nn.L1Loss()
         val_error_function = nn.L1Loss()
+        val_error_function_margin = AdaptiveMarginLoss(
+            min_days_error=5, max_days_error=30, max_days=self.max_days
+        )
 
         self.criterion = train_error_function
-        self.val_criterions = {"L1": val_error_function}
+        self.val_criterions = {
+            "L1": val_error_function,
+            "marginloss": val_error_function_margin,
+        }
         self.watch_val_loss = "L1"
 
         # Losses
@@ -159,6 +177,7 @@ class BasicRegressionPipeline(Pipeline):
             self.val_criterions = {
                 "L1": val_error_function,
                 "L1 scaled": ScalerLoss(val_error_function, self.l1_loss_weighting),
+                "marginloss": val_error_function_margin,
             }
 
             self.watch_val_loss = "L1 scaled"
@@ -214,6 +233,8 @@ class BasicRegressionPipeline(Pipeline):
             train_loss = 0.0
             train_sim_loss = 0.0
 
+            self.criterion.toggle_store_values()
+
             for i in tqdm(range(steps), leave=True):
                 reg_loss, reg_size = self.train_step(
                     self.train_loader,
@@ -232,14 +253,12 @@ class BasicRegressionPipeline(Pipeline):
                     )
                     x1, x2 = self.xy_to_device(x1, x2, self.device)
                     y1, y2 = self.model(x1), self.model(x2)
-                    sim_loss = self.criterion(y1, y2)
+                    sim_loss = self.sim_criterion(y1, y2)
 
                     loss = reg_loss + self.sim_alpha * sim_loss
                     train_sim_loss += sim_loss.item() * self.get_size(x1)
                 else:
                     loss = reg_loss
-
-                # loss += self.criterion.weight.a * 0.004
 
                 # Backward pass and optimization
                 loss.backward()
@@ -249,14 +268,19 @@ class BasicRegressionPipeline(Pipeline):
 
                 n_samples = self.batch_size * (i + 1)
                 pbar.set_description(
-                    f"Regression train loss: {(train_loss/n_samples):.5f} - Similarity train loss: {(train_sim_loss/n_samples):.5f} - Weight slope : {self.criterion.weight.a}"
+                    f"Regression train loss: {(train_loss/n_samples):.5f} - Similarity train loss: {(train_sim_loss/n_samples):.5f}"  # - Weight slope : {self.criterion.weight.a}"
                 )
 
             train_loss /= len(self.train_dataset)
+            self.criterion.display_stored_values("train_margin")
+            self.criterion.toggle_store_values()
 
             # Validation loop
             self.model.eval()  # Set the model to evaluation mode
             val_losses = {}
+
+            # Store values for analysis
+            self.val_criterions["marginloss"].toggle_store_values()
 
             with torch.no_grad():
                 for val_name, val_fnct in self.val_criterions.items():
@@ -279,6 +303,10 @@ class BasicRegressionPipeline(Pipeline):
                 )
             else:
                 log.info(f"Val loss did not improved from {best_val:.4f}")
+
+            # Display stored values
+            self.val_criterions["marginloss"].display_stored_values("val_margin")
+            self.val_criterions["marginloss"].toggle_store_values()
 
             # Print training and validation metrics
             val_str = " - ".join(
