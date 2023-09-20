@@ -122,12 +122,12 @@ import albumentations as A
 
 AUGMENTATION_PIPELINE = A.Compose(
     [
-        A.Flip(p=0.5),
+        # A.Flip(p=0.5),
         A.ShiftScaleRotate(
             p=0.5,
             shift_limit=0.0,
             scale_limit=0.5,
-            rotate_limit=45,
+            rotate_limit=0,
             border_mode=cv2.BORDER_CONSTANT,
         ),
         A.OneOf(
