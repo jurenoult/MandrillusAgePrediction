@@ -80,6 +80,16 @@ class RegressionRankingPipeline(BasicRegressionPipeline):
     def init_loggers(self):
         pass
 
+    def train_step(self, loader, model, criterion, device):
+        x, y = next(iter(loader))
+        x, y = self.xy_to_device(x, y, device)
+
+        # Forward pass
+        y_hat = model(x)
+        loss = criterion(y_hat, y)
+
+        return loss, self.get_size(x)
+
     def train(self):
         steps = len(self.train_loader)
 
@@ -105,31 +115,60 @@ class RegressionRankingPipeline(BasicRegressionPipeline):
             self.ranking_model.train()
             train_regression_loss = 0.0
             train_ranking_loss = 0.0
+            train_sim_loss = 0.0
+
+            self.criterion.toggle_store_values()
 
             for i in tqdm(range(steps), leave=True):
-                train_regression_loss += self.train_step(
+                self.optimizer.zero_grad()
+                reg_loss, reg_size = self.train_step(
                     self.train_loader,
-                    self.optimizer,
                     self.model,
                     self.criterion,
                     self.device,
                 )
-                train_ranking_loss += self.train_step(
+                ranking_loss, ranking_size = self.train_step(
                     self.ranking_train_loader,
-                    self.ranking_optimizer,
                     self.ranking_model,
                     self.ranking_criterion,
                     self.device,
                 )
 
+                ### SIMILARITY LOSS
+                x1, x2 = next(
+                    iter(
+                        self.train_similarity_loader,
+                    )
+                )
+                x1, x2 = self.xy_to_device(x1, x2, self.device)
+                y1, y2 = self.model(x1), self.model(x2)
+                sim_loss = self.criterion(y1, y2)
+
+                # Backward pass and optimization
+                loss = (
+                    reg_loss
+                    + self.ranking_alpha * ranking_loss
+                    + self.sim_alpha * sim_loss
+                )
+                loss.backward()
+                self.optimizer.step()
+
+                train_regression_loss += reg_loss.item() * reg_size
+                train_ranking_loss += ranking_loss.item() * ranking_size
+                train_sim_loss += sim_loss.item() * self.get_size(x1)
+
                 n_samples = self.batch_size * (i + 1)
                 pbar.set_description(
                     f"Train Regression Loss: {(train_regression_loss/n_samples):.5f} - "
-                    f"Train Ranking Loss: {(train_ranking_loss/n_samples):.5f}"
+                    f"Train Ranking Loss: {(train_ranking_loss/n_samples):.5f} - "
+                    f"Train Sim Loss: {(train_sim_loss/n_samples):.5f}"
                 )
 
             train_regression_loss /= len(self.train_dataset)
             train_ranking_loss /= len(self.train_dataset)
+
+            self.criterion.display_stored_values("train_margin")
+            self.criterion.toggle_store_values()
 
             # Validation loop
             self.model.eval()  # Set the model to evaluation mode
@@ -137,11 +176,17 @@ class RegressionRankingPipeline(BasicRegressionPipeline):
             val_regression_loss = 0.0
             val_ranking_loss = 0.0
             n_repeat = 1
+            val_losses = {}
+
+            self.val_criterions["marginloss"].toggle_store_values()
 
             with torch.no_grad():
-                val_regression_loss = self.val_loss(
-                    self.val_loader, self.model, self.val_criterion, self.device
-                )
+                for val_name, val_fnct in self.val_criterions.items():
+                    val_losses[val_name] = self.val_loss(
+                        self.val_loader, self.model, val_fnct, self.device
+                    )
+                    val_losses[val_name] /= len(self.val_dataset)
+
                 val_ranking_loss = self.val_loss(
                     self.ranking_val_loader,
                     self.ranking_model,
@@ -149,14 +194,15 @@ class RegressionRankingPipeline(BasicRegressionPipeline):
                     self.device,
                     repeat=n_repeat,
                 )
-            val_regression_loss /= len(self.val_dataset)
-            val_ranking_loss /= len(self.val_dataset)
+                val_ranking_loss /= len(self.val_dataset)
 
-            if val_regression_loss < best_val:
+            val_loss = val_losses[self.watch_val_loss]
+
+            if val_loss < best_val:
                 log.info(
-                    f"Val regression loss improved from {best_val:.4f} to {val_regression_loss:.4f}"
+                    f"Val regression loss improved from {best_val:.4f} to {val_loss:.4f}"
                 )
-                best_val = val_regression_loss
+                best_val = val_loss
                 save(
                     self.model,
                     f"regression_{self.train_index}",
@@ -172,12 +218,19 @@ class RegressionRankingPipeline(BasicRegressionPipeline):
             else:
                 log.info(f"Val regression loss did not improved from {best_val:.4f}")
 
+            # Display stored values
+            self.val_criterions["marginloss"].display_stored_values("val_margin")
+            self.val_criterions["marginloss"].toggle_store_values()
+
             # Print training and validation metrics
+            val_str = " - ".join(
+                [f" val_{name}: {value:.5f}" for name, value in val_losses.items()]
+            )
             log.info(
                 f"Epoch [{epoch+1}/{self.epochs}] - "
                 f"Train Regression Loss: {train_regression_loss:.5f} - "
                 f"Train Ranking Loss: {train_ranking_loss:.5f} - "
-                f"Val Regression Loss: {val_regression_loss:.5f}"
+                f"{val_str} - "
                 f"Val Ranking Loss: {val_ranking_loss:.5f}"
             )
 
@@ -189,3 +242,4 @@ class RegressionRankingPipeline(BasicRegressionPipeline):
         self.ranking_learning_rate = self.config.training.ranking_learning_rate
         self.n_classes = self.config.dataset.n_classes
         self.same_age_gap = self.config.dataset.same_age_gap
+        self.ranking_alpha = self.config.training.ranking_alpha
