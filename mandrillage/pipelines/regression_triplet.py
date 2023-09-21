@@ -55,6 +55,7 @@ class RegressionTripletPipeline(BasicRegressionPipeline):
 
     def init_losses(self):
         super().init_losses()
+        print(self.val_criterions)
         self.triplet_criterion = TripletLossAdaptiveMargin()
         self.triplet_val_criterion = TripletLossAdaptiveMargin()
 
@@ -125,7 +126,7 @@ class RegressionTripletPipeline(BasicRegressionPipeline):
                 )
 
                 # Backward pass and optimization
-                loss = reg_loss + self.triplet_alpha * triplet_loss
+                loss = 0.000 * reg_loss + self.triplet_alpha * triplet_loss
                 loss.backward()
                 self.optimizer.step()
 
@@ -141,6 +142,8 @@ class RegressionTripletPipeline(BasicRegressionPipeline):
             train_regression_loss /= len(self.train_dataset)
             train_triplet_loss /= len(self.train_dataset)
 
+            self.criterion.display_stored_values("train_margin")
+
             # Validation loop
             self.model.eval()  # Set the model to evaluation mode
             val_regression_loss = 0.0
@@ -149,7 +152,10 @@ class RegressionTripletPipeline(BasicRegressionPipeline):
 
             with torch.no_grad():
                 val_regression_loss = self.val_loss(
-                    self.val_loader, self.model, self.val_criterion, self.device
+                    self.val_loader,
+                    self.model,
+                    self.val_criterions[self.watch_val_loss],
+                    self.device,
                 )
 
                 for i in range(len(self.triplet_val_loader)):
@@ -159,6 +165,8 @@ class RegressionTripletPipeline(BasicRegressionPipeline):
                         self.triplet_val_criterion,
                     )
                     val_triplet_loss += triplet_loss.item() * triplet_size
+
+            self.val_criterions["marginloss"].display_stored_values("val_margin")
 
             val_regression_loss /= len(self.val_dataset)
             val_triplet_loss /= len(self.val_dataset)

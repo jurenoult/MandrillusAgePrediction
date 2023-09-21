@@ -1,4 +1,3 @@
-# @package _global_
 pipeline:
   _target_: mandrillage.pipelines.regression_ranking.RegressionRankingPipeline
 
@@ -27,8 +26,8 @@ training:
   batch_size: 16
   epochs: 100
   ranking_learning_rate: 0.00001
-  ranking_alpha: 0.01
-  sim_alpha: 1
+  ranking_alpha: 1
+  sim_alpha: 0
   linear_weighting:
     min_age_error_max: 5
     max_age_error_max: 30

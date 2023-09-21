@@ -117,8 +117,6 @@ class RegressionRankingPipeline(BasicRegressionPipeline):
             train_ranking_loss = 0.0
             train_sim_loss = 0.0
 
-            self.criterion.toggle_store_values()
-
             for i in tqdm(range(steps), leave=True):
                 self.optimizer.zero_grad()
                 reg_loss, reg_size = self.train_step(
@@ -146,7 +144,7 @@ class RegressionRankingPipeline(BasicRegressionPipeline):
 
                 # Backward pass and optimization
                 loss = (
-                    reg_loss
+                    0.0 * reg_loss
                     + self.ranking_alpha * ranking_loss
                     + self.sim_alpha * sim_loss
                 )
@@ -167,8 +165,7 @@ class RegressionRankingPipeline(BasicRegressionPipeline):
             train_regression_loss /= len(self.train_dataset)
             train_ranking_loss /= len(self.train_dataset)
 
-            self.criterion.display_stored_values("train_margin")
-            self.criterion.toggle_store_values()
+            # self.criterion.display_stored_values("train_margin")
 
             # Validation loop
             self.model.eval()  # Set the model to evaluation mode
@@ -177,8 +174,6 @@ class RegressionRankingPipeline(BasicRegressionPipeline):
             val_ranking_loss = 0.0
             n_repeat = 1
             val_losses = {}
-
-            self.val_criterions["marginloss"].toggle_store_values()
 
             with torch.no_grad():
                 for val_name, val_fnct in self.val_criterions.items():
@@ -219,8 +214,7 @@ class RegressionRankingPipeline(BasicRegressionPipeline):
                 log.info(f"Val regression loss did not improved from {best_val:.4f}")
 
             # Display stored values
-            self.val_criterions["marginloss"].display_stored_values("val_margin")
-            self.val_criterions["marginloss"].toggle_store_values()
+            # self.val_criterions["marginloss"].display_stored_values("val_margin")
 
             # Print training and validation metrics
             val_str = " - ".join(

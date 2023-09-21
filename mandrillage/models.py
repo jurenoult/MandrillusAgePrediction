@@ -151,7 +151,7 @@ class RegressionModel(nn.Module):
             self.blocks = nn.Sequential(lin_layers)
         self.input_dim = input_dim
         self.output_dim = output_dim
-        self.linear = nn.Linear(last_feature_size, output_dim)
+        self.linear = nn.Linear(last_feature_size, output_dim, bias=False)
         self.activation = nn.Sigmoid()
         self.sigmoid = sigmoid
 

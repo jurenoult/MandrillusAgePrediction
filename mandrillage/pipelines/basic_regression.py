@@ -61,7 +61,7 @@ class BasicRegressionPipeline(Pipeline):
             sex=self.sex,
         )
 
-        # self.data = resample(self.data, bins=12)
+        # self.data = resample(self.data, bins=int(self.max_age))
 
         # Make the split based on individual ids (cannot separate photos from the same id)
         if self.kfold == 0:
@@ -116,18 +116,18 @@ class BasicRegressionPipeline(Pipeline):
         pass
 
     def init_model(self):
-        # self.backbone = VGGFace(
-        #     start_filters=self.vgg_start_filters, output_dim=self.vgg_output_dim
-        # )
-        # if self.vgg_face_pretrained_path:
-        #     if os.path.exists(self.vgg_face_pretrained_path):
-        #         self.backbone.load_weights(self.vgg_face_pretrained_path)
-        #     else:
-        #         log.error(
-        #             f"Could not find model path at {self.vgg_face_pretrained_path}"
-        #         )
+        self.backbone = VGGFace(
+            start_filters=self.vgg_start_filters, output_dim=self.vgg_output_dim
+        )
+        if self.vgg_face_pretrained_path:
+            if os.path.exists(self.vgg_face_pretrained_path):
+                self.backbone.load_weights(self.vgg_face_pretrained_path)
+            else:
+                log.error(
+                    f"Could not find model path at {self.vgg_face_pretrained_path}"
+                )
 
-        self.backbone = CoAtNetBackbone(output_dim=1024)
+        # self.backbone = CoAtNetBackbone(output_dim=1024)
         self.model = RegressionModel(
             self.backbone,
             input_dim=self.backbone.output_dim,
@@ -140,14 +140,17 @@ class BasicRegressionPipeline(Pipeline):
     def init_losses(self):
         # train_error_function = nn.MSELoss()
         # val_error_function = nn.L1Loss()
+        days = 10
+        min_days = days
+        max_days = days
 
         train_error_function = AdaptiveMarginLoss(
-            min_days_error=5, max_days_error=30, max_days=self.max_days
+            min_days_error=min_days, max_days_error=max_days, max_days=self.max_days
         )
         self.sim_criterion = nn.L1Loss()
         val_error_function = nn.L1Loss()
         val_error_function_margin = AdaptiveMarginLoss(
-            min_days_error=5, max_days_error=30, max_days=self.max_days
+            min_days_error=min_days, max_days_error=max_days, max_days=self.max_days
         )
 
         self.criterion = train_error_function
@@ -233,8 +236,6 @@ class BasicRegressionPipeline(Pipeline):
             train_loss = 0.0
             train_sim_loss = 0.0
 
-            self.criterion.toggle_store_values()
-
             for i in tqdm(range(steps), leave=True):
                 reg_loss, reg_size = self.train_step(
                     self.train_loader,
@@ -273,14 +274,12 @@ class BasicRegressionPipeline(Pipeline):
 
             train_loss /= len(self.train_dataset)
             self.criterion.display_stored_values("train_margin")
-            self.criterion.toggle_store_values()
 
             # Validation loop
             self.model.eval()  # Set the model to evaluation mode
             val_losses = {}
 
             # Store values for analysis
-            self.val_criterions["marginloss"].toggle_store_values()
 
             with torch.no_grad():
                 for val_name, val_fnct in self.val_criterions.items():
@@ -306,7 +305,6 @@ class BasicRegressionPipeline(Pipeline):
 
             # Display stored values
             self.val_criterions["marginloss"].display_stored_values("val_margin")
-            self.val_criterions["marginloss"].toggle_store_values()
 
             # Print training and validation metrics
             val_str = " - ".join(

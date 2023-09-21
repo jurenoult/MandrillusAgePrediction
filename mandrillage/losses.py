@@ -29,7 +29,7 @@ class AdaptiveMarginLoss(nn.Module):
         self.a = self.max_error - self.b
 
         self.loss = nn.L1Loss(reduction="none")
-        self.store_values = False
+        # self.store_values = False
         self.stored_values = []
 
         self.weight_b = self.error_ratio
@@ -65,6 +65,7 @@ class AdaptiveMarginLoss(nn.Module):
                 axs[2].scatter(y_true, pred)
         plt.savefig(f"{name}.png")
         plt.close()
+        self.stored_values = []
 
     def get_margin(self, x):
         return self.a * x + self.b
@@ -81,8 +82,8 @@ class AdaptiveMarginLoss(nn.Module):
         distance = error - margin
 
         weight = self.get_weight(y_true)
-        if self.store_values:
-            self.stored_values.append((error, error * weight, y_pred, y_true))
+        # if self.store_values:
+        self.stored_values.append((error, error * weight, y_pred, y_true))
 
         # Only penalize samples that are not within the margin distance
         loss = torch.mean(
