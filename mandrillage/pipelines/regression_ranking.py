@@ -191,11 +191,12 @@ class RegressionRankingPipeline(BasicRegressionPipeline):
                 )
                 val_ranking_loss /= len(self.val_dataset)
 
-            val_loss = val_losses[self.watch_val_loss]
+            # val_loss = val_losses[self.watch_val_loss]
+            val_loss = val_ranking_loss
 
             if val_loss < best_val:
                 log.info(
-                    f"Val regression loss improved from {best_val:.4f} to {val_loss:.4f}"
+                    f"Val ranking loss improved from {best_val:.4f} to {val_loss:.4f}"
                 )
                 best_val = val_loss
                 save(
