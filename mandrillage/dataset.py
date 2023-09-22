@@ -75,11 +75,16 @@ def read_dataset(
     # All columns to lowercase
     data.columns = data.columns.str.lower()
 
+    data = data.drop("pos_pic", axis=1)
+
     data["shootdate"].replace("nan", np.nan, inplace=True)
     data["shootdate"].replace("#N/D", np.nan, inplace=True)
     data["dob"].replace("#N/D", np.nan, inplace=True)
-
+    # data["shootdate"].replace("", np.nan, inplace=True)
+    len_raw = len(data)
     data = data.dropna()
+    len_filter_errors = len(data)
+    print(f"Filtered #{len_filter_errors-len_raw} ({len_filter_errors}/{len_raw})")
     data["age"] = data.apply(compute_age, axis=1)
 
     if sex:

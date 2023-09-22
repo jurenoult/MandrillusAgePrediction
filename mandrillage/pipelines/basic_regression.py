@@ -61,6 +61,10 @@ class BasicRegressionPipeline(Pipeline):
             sex=self.sex,
         )
 
+        print("Dataset length")
+        print(len(self.data))
+        input()
+
         # self.data = resample(self.data, bins=int(self.max_age))
 
         # Make the split based on individual ids (cannot separate photos from the same id)
