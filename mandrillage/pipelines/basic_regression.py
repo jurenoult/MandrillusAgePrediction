@@ -238,7 +238,7 @@ class BasicRegressionPipeline(Pipeline):
         #         self.model, self.optimizer, self.criterion, device=self.device
         #     )
         #     lr_finder.range_test(
-        #         self.train_loader, num_iter=300, start_lr=1e-7, end_lr=100
+        #         self.train_loader, num_iter=50, start_lr=1e-7, end_lr=1
         #     )
         #     lr_finder.plot()  # to inspect the loss-learning rate graph
         #     lr_finder.reset()  # to reset the model and optimizer to their initial state
