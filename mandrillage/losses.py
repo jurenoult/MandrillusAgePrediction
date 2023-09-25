@@ -43,7 +43,7 @@ class AdaptiveMarginLoss(nn.Module):
     def to_npy(self, tensor):
         return tensor.detach().cpu().numpy()
 
-    def display_stored_values(self, name):
+    def display_stored_values(self, path):
         import matplotlib.pyplot as plt
         import os
 
@@ -69,7 +69,14 @@ class AdaptiveMarginLoss(nn.Module):
             #     axs[0].scatter(y_true, error)
             #     axs[1].scatter(y_true, weight)
             #     axs[2].scatter(y_true, pred)
-        plt.savefig(f"{name}.png")
+        axs[0].set_xlim([0, 1])
+        axs[0].set_ylim([0, 1])
+        axs[1].set_xlim([0, 1])
+        axs[1].set_ylim([0, max(self.get_weight(1), 1)])
+        axs[2].set_xlim([0, 1])
+        axs[2].set_ylim([0, 1])
+
+        plt.savefig(f"{path}.png")
         plt.close()
         self.stored_values = []
 

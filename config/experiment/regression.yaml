@@ -24,6 +24,7 @@ training:
   batch_size: 16
   epochs: 100
   sim_alpha: 1
+  train_backbone: True
   linear_weighting:
     min_age_error_max: 5
     max_age_error_max: 90

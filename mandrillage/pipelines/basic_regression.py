@@ -148,25 +148,25 @@ class BasicRegressionPipeline(Pipeline):
         self.model = self.model.to(self.device)
 
     def init_losses(self):
-        # train_error_function = nn.MSELoss()
-        # val_error_function = nn.L1Loss()
-        days = 10
-        min_days = days
-        max_days = days
+        train_error_function = nn.MSELoss()
+        val_error_function = nn.L1Loss()
+        # days = 10
+        # min_days = days
+        # max_days = days
 
-        train_error_function = AdaptiveMarginLoss(
-            min_days_error=min_days, max_days_error=max_days, max_days=self.max_days
-        )
+        # train_error_function = AdaptiveMarginLoss(
+        #     min_days_error=min_days, max_days_error=max_days, max_days=self.max_days
+        # )
         self.sim_criterion = nn.L1Loss()
         val_error_function = nn.L1Loss()
-        val_error_function_margin = AdaptiveMarginLoss(
-            min_days_error=min_days, max_days_error=max_days, max_days=self.max_days
-        )
+        # val_error_function_margin = AdaptiveMarginLoss(
+        #     min_days_error=min_days, max_days_error=max_days, max_days=self.max_days
+        # )
 
         self.criterion = train_error_function
         self.val_criterions = {
             "L1": val_error_function,
-            "marginloss": val_error_function_margin,
+            # "marginloss": val_error_function_margin,
         }
         self.watch_val_loss = "L1"
 
@@ -190,12 +190,17 @@ class BasicRegressionPipeline(Pipeline):
             self.val_criterions = {
                 "L1": val_error_function,
                 "L1 scaled": ScalerLoss(val_error_function, self.l1_loss_weighting),
-                "marginloss": val_error_function_margin,
+                # "marginloss": val_error_function_margin,
             }
 
             self.watch_val_loss = "L1 scaled"
 
     def init_optimizers(self):
+        if not self.train_backbone:
+            # Freeze backbone parameters
+            for param in self.backbone.parameters():
+                param.requires_grad = False
+
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
 
         if isinstance(self.criterion, BMCLoss):
@@ -283,7 +288,9 @@ class BasicRegressionPipeline(Pipeline):
                 )
 
             train_loss /= len(self.train_dataset)
-            self.criterion.display_stored_values("train_margin")
+            # self.criterion.display_stored_values(
+            #     os.path.join(self.output_dir, f"train_margin_epoch_{epoch}")
+            # )
 
             # Validation loop
             self.model.eval()  # Set the model to evaluation mode
@@ -314,7 +321,9 @@ class BasicRegressionPipeline(Pipeline):
                 log.info(f"Val loss did not improved from {best_val:.4f}")
 
             # Display stored values
-            self.val_criterions["marginloss"].display_stored_values("val_margin")
+            # self.val_criterions["marginloss"].display_stored_values(
+            #     os.path.join(self.output_dir, f"val_margin_epoch_{epoch}")
+            # )
 
             # Print training and validation metrics
             val_str = " - ".join(
@@ -429,3 +438,4 @@ class BasicRegressionPipeline(Pipeline):
         self.vgg_face_pretrained_path = self.config.model.pretrained
 
         self.linear_weighting = self.config.training.linear_weighting
+        self.train_backbone = self.config.training.train_backbone
