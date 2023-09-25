@@ -6,6 +6,8 @@ import torch
 import volo
 from volo import volo_d1
 import torchfile
+from torch.nn.utils import weight_norm
+from torch.nn.init import trunc_normal_
 
 
 class VoloBackbone(nn.Module):
@@ -143,22 +145,28 @@ class RegressionModel(nn.Module):
         previous_feature_size = input_dim
         current_feature_size = lin_start
         last_feature_size = input_dim
-        self.blocks = None
-        if n_lin > 0:
-            lin_layers, last_feature_size = build_layers(
-                n_lin, self.block, previous_feature_size, current_feature_size
-            )
-            self.blocks = nn.Sequential(lin_layers)
+        n_lin = max(1, n_lin)
+        lin_layers, last_feature_size = build_layers(
+            n_lin, self.block, previous_feature_size, current_feature_size
+        )
+        self.blocks = nn.Sequential(lin_layers)
         self.input_dim = input_dim
         self.output_dim = output_dim
-        self.linear = nn.Linear(last_feature_size, output_dim, bias=False)
+        self.linear = weight_norm(nn.Linear(last_feature_size, output_dim, bias=False))
+        self.linear.weight_g.data.fill_(1)
         self.activation = nn.Sigmoid()
         self.sigmoid = sigmoid
 
     def block(self, in_features, out_features):
         lin = nn.Linear(in_features, out_features)
-        relu = nn.ReLU(inplace=True)
-        return nn.Sequential(lin, relu)
+        gelu = nn.GELU()
+        return nn.Sequential(lin, gelu)
+
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            trunc_normal_(m.weight, std=0.02)
+            if isinstance(m, nn.Linear) and m.bias is not None:
+                nn.init.constant_(m.bias, 0)
 
     def forward(self, x):
         z = x
@@ -166,9 +174,10 @@ class RegressionModel(nn.Module):
         if self.cnn_backbone:
             z = self.cnn_backbone.features(z)
 
-        if self.blocks:
-            z = self.blocks(z)
+        z = self.blocks(z)
 
+        eps = 1e-6 if z.dtype == torch.float16 else 1e-12
+        z = nn.functional.normalize(z, dim=-1, p=2, eps=eps)
         z = self.linear(z)
 
         if self.output_dim == 1:
