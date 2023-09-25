@@ -165,7 +165,7 @@ class RegressionRankingPipeline(BasicRegressionPipeline):
             train_regression_loss /= len(self.train_dataset)
             train_ranking_loss /= len(self.train_dataset)
 
-            # self.criterion.display_stored_values("train_margin")
+            self.criterion.display_stored_values("train_margin")
 
             # Validation loop
             self.model.eval()  # Set the model to evaluation mode
@@ -215,7 +215,7 @@ class RegressionRankingPipeline(BasicRegressionPipeline):
                 log.info(f"Val regression loss did not improved from {best_val:.4f}")
 
             # Display stored values
-            # self.val_criterions["marginloss"].display_stored_values("val_margin")
+            self.val_criterions["marginloss"].display_stored_values("val_margin")
 
             # Print training and validation metrics
             val_str = " - ".join(

@@ -40,6 +40,9 @@ class AdaptiveMarginLoss(nn.Module):
         if not self.store_values:
             self.stored_values = []
 
+    def to_npy(self, tensor):
+        return tensor.detach().cpu().numpy()
+
     def display_stored_values(self, name):
         import matplotlib.pyplot as plt
         import os
@@ -52,17 +55,20 @@ class AdaptiveMarginLoss(nn.Module):
 
         # For each batch stored
         for errors, weights, preds, ys_true in self.stored_values:
-            for i in range(errors.shape[0]):
-                error, weight, pred, y_true = (
-                    errors[i].detach().cpu().numpy(),
-                    weights[i].detach().cpu().numpy(),
-                    preds[i].detach().cpu().numpy(),
-                    ys_true[i].detach().cpu().numpy(),
-                )
-                # Plot for the given age y_true, the distance to the margin (the error)
-                axs[0].scatter(y_true, error)
-                axs[1].scatter(y_true, weight)
-                axs[2].scatter(y_true, pred)
+            axs[0].scatter(self.to_npy(ys_true), self.to_npy(errors))
+            axs[1].scatter(self.to_npy(ys_true), self.to_npy(weights))
+            axs[2].scatter(self.to_npy(ys_true), self.to_npy(preds))
+            # for i in range(errors.shape[0]):
+            #     error, weight, pred, y_true = (
+            #         errors[i].detach().cpu().numpy(),
+            #         weights[i].detach().cpu().numpy(),
+            #         preds[i].detach().cpu().numpy(),
+            #         ys_true[i].detach().cpu().numpy(),
+            #     )
+            #     # Plot for the given age y_true, the distance to the margin (the error)
+            #     axs[0].scatter(y_true, error)
+            #     axs[1].scatter(y_true, weight)
+            #     axs[2].scatter(y_true, pred)
         plt.savefig(f"{name}.png")
         plt.close()
         self.stored_values = []

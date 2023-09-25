@@ -179,6 +179,21 @@ class RegressionModel(nn.Module):
         return z
 
 
+class DinoV2(nn.Module):
+    def __init__(
+        self,
+    ):
+        super(DinoV2, self).__init__()
+        self.backbone = torch.hub.load("facebookresearch/dinov2", "dinov2_vits14")
+        self.output_dim = 384
+
+    def features(self, x):
+        return self.backbone(x)
+
+    def forward(self, x):
+        return self.features(x)
+
+
 class FeatureClassificationModel(nn.Module):
     def __init__(
         self,
