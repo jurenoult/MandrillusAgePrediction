@@ -399,7 +399,7 @@ class MandrillSimilarityImageDataset(MandrillImageDataset):
         x2, y2 = self._getpair(id2)
 
         # Update the bool value based on what samples were drawn
-        is_same_age = abs(y1 - y2) < 1e-4
+        is_same_age = abs(y1 - y2) < 1e-6
 
         # Only binary
         y = torch.zeros([2])
@@ -407,9 +407,9 @@ class MandrillSimilarityImageDataset(MandrillImageDataset):
         y[y_index] = 1
 
         if is_same_age:
-            assert abs(y1 - y2) <= 1e-4, f"Expected same ages but got {y1} & {y2}"
+            assert abs(y1 - y2) <= 1e-6, f"Expected same ages but got {y1} & {y2}"
         else:
-            assert abs(y1 - y2) > 1e-4, f"Expected different ages but got {y1} & {y2}"
+            assert abs(y1 - y2) > 1e-6, f"Expected different ages but got {y1} & {y2}"
 
         return x1, x2, y
 

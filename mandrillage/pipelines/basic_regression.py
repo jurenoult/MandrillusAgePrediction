@@ -140,11 +140,10 @@ class BasicRegressionPipeline(Pipeline):
             cnn_backbone=self.backbone,
             input_dim=self.backbone.output_dim,
             n_classes=2,
-            n_lin=0,
         )
 
         self.backbone = self.backbone.to(self.device)
-        self.model = self.model.to(self.device)
+        # self.model = self.model.to(self.device)
         self.sim_model = self.sim_model.to(self.device)
 
     def init_losses(self):
@@ -273,7 +272,8 @@ class BasicRegressionPipeline(Pipeline):
                     y1 = self.sim_model((x1, x2))
                     sim_loss = self.sim_criterion(y1, y)
 
-                    loss = reg_loss + self.sim_alpha * sim_loss
+                    # Disable regression loss
+                    loss = 0 * reg_loss + self.sim_alpha * sim_loss
                     train_sim_loss += sim_loss.item() * self.get_size(x1)
                 else:
                     loss = reg_loss

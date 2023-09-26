@@ -209,15 +209,15 @@ class FeatureClassificationModel(nn.Module):
         input_dim=1024,
         n_input=2,
         n_classes=2,
-        lin_start=2048,
-        n_lin=6,
+        lin_start=256,
+        n_lin=3,
     ):
         super(FeatureClassificationModel, self).__init__()
         self.cnn_backbone = cnn_backbone
         self.blocks = None
 
-        # previous_feature_size = n_input * input_dim
-        previous_feature_size = input_dim
+        previous_feature_size = n_input * input_dim
+        # previous_feature_size = input_dim
         current_feature_size = lin_start
         last_feature_size = previous_feature_size
         if n_lin > 0:
@@ -241,8 +241,8 @@ class FeatureClassificationModel(nn.Module):
         z1 = self.get_z(x1)
         z2 = self.get_z(x2)
 
-        # z = torch.cat([z1, z2], axis=-1)
-        z = torch.sub(z1, z2)
+        z = torch.cat([z1, z2], axis=-1)
+        # z = torch.sub(z1, z2)
         if self.blocks:
             z = self.blocks(z)
         z = self.age_gap(z)
