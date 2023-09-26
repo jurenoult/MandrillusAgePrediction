@@ -5,4 +5,5 @@ sim_weight: 1.0
 reg_weight: 1.0
 train_backbone: True
 use_augmentation: True
+use_similarity_augmentation: False
 backbone_checkpoint: null

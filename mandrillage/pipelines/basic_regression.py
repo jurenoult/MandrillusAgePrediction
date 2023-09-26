@@ -92,7 +92,7 @@ class BasicRegressionPipeline(Pipeline):
         )
         self.train_similarity_dataset.set_images(self.train_dataset.images)
 
-        if self.config.training.use_augmentation:
+        if self.config.training.use_similarity_augmentation:
             self.train_similarity_dataset = AugmentedSimilarityDataset(
                 self.train_similarity_dataset
             )
