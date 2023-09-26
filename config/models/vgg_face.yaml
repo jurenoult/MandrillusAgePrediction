@@ -1,0 +1,3 @@
+_target_: mandrillage.models.VGGFace
+vgg_start_filters: 64
+vgg_output_dim: 2622

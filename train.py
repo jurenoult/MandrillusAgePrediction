@@ -16,7 +16,7 @@ def print_auto_logged_info(r):
 
 
 def run(config: DictConfig):
-    pipeline = hydra.utils.instantiate(config.experiment.pipeline)
+    pipeline = hydra.utils.instantiate(config.pipeline)
 
     hydra_cfg = hydra.core.hydra_config.HydraConfig.get()
     output_dir = hydra_cfg["runtime"]["output_dir"]
@@ -24,7 +24,7 @@ def run(config: DictConfig):
     # Auto log all MLflow entities
     # mlflow.pytorch.autolog()
 
-    pipeline.set_config(config.experiment, output_dir)
+    pipeline.set_config(config, output_dir)
 
     # with mlflow.start_run() as run:
     score = pipeline.run()

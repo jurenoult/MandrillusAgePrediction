@@ -10,6 +10,18 @@ from torch.nn.utils import weight_norm
 from torch.nn.init import trunc_normal_
 
 
+class SequentialModel(nn.Module):
+    def __init__(self, backbone, head):
+        super(SequentialModel, self).__init__()
+        self.backbone = backbone
+        self.head = head
+
+    def forward(self, x):
+        x = self.backbone(x)
+        x = self.head(x)
+        return x
+
+
 class VoloBackbone(nn.Module):
     def __init__(
         self,
@@ -47,65 +59,6 @@ def build_layers(n, method, prev_features, current_features, down=True):
     return layers, prev_features
 
 
-class DeepNormal(nn.Module):
-    def __init__(
-        self,
-        cnn_backbone=None,
-        input_dim=1,
-        lin_start=2048,
-        n_lin=6,
-    ):
-        super().__init__()
-
-        self.cnn_backbone = cnn_backbone
-
-        previous_feature_size = input_dim
-        current_feature_size = lin_start
-        last_feature_size = input_dim
-        self.blocks = None
-        if n_lin > 0:
-            lin_layers, last_feature_size = build_layers(
-                n_lin, self.block, previous_feature_size, current_feature_size
-            )
-        self.blocks = nn.Sequential(lin_layers)
-
-        # Mean parameters
-        self.mean_layer = nn.Sequential(
-            nn.Linear(last_feature_size, last_feature_size),
-            nn.ReLU(),
-            nn.Dropout(),
-            nn.Linear(last_feature_size, 1),
-            nn.Sigmoid(),
-        )
-
-        # Standard deviation parameters
-        self.std_layer = nn.Sequential(
-            nn.Linear(last_feature_size, last_feature_size),
-            nn.ReLU(),
-            nn.Dropout(),
-            nn.Linear(last_feature_size, 1),
-            nn.Sigmoid(),  # enforces positivity
-        )
-
-    def block(self, in_features, out_features):
-        lin = nn.Linear(in_features, out_features)
-        relu = nn.ReLU(inplace=True)
-        return nn.Sequential(lin, relu)
-
-    def forward(self, x):
-        # Shared embedding
-        shared = self.cnn_backbone(x)
-        shared = self.blocks(shared)
-
-        # Parametrization of the mean
-        u = self.mean_layer(shared)
-
-        # Parametrization of the standard deviation
-        q = self.std_layer(shared)
-
-        return torch.concat([u, q], axis=-1)
-
-
 class CoralModel(torch.nn.Module):
     def __init__(self, backbone, input_dim, num_classes):
         super(CoralModel, self).__init__()
@@ -128,20 +81,17 @@ class CoralModel(torch.nn.Module):
         return logits, probas
 
 
-class RegressionModel(nn.Module):
+class RegressionHead(nn.Module):
     def __init__(
         self,
-        cnn_backbone=None,
         input_dim=1,
         output_dim=1,
         lin_start=2048,
         n_lin=6,
         sigmoid=True,
     ):
-        super(RegressionModel, self).__init__()
-        self.cnn_backbone = cnn_backbone
+        super(RegressionHead, self).__init__()
 
-        ############ Dense layers ########
         previous_feature_size = input_dim
         current_feature_size = lin_start
         last_feature_size = input_dim
@@ -169,22 +119,16 @@ class RegressionModel(nn.Module):
                 nn.init.constant_(m.bias, 0)
 
     def forward(self, x):
-        z = x
-
-        if self.cnn_backbone:
-            z = self.cnn_backbone.features(z)
-
         if self.blocks:
-            z = self.blocks(z)
-
-        z = self.linear(z)
+            x = self.blocks(x)
+        x = self.linear(x)
 
         if self.output_dim == 1:
-            z = torch.reshape(z, (z.shape[0],))
+            x = torch.reshape(x, (x.shape[0],))
 
         if self.sigmoid:
-            z = self.activation(z)
-        return z
+            x = self.activation(x)
+        return x
 
 
 class DinoV2(nn.Module):
@@ -202,19 +146,19 @@ class DinoV2(nn.Module):
         return self.features(x)
 
 
-class FeatureClassificationModel(nn.Module):
+class ClassificationHead(nn.Module):
     def __init__(
         self,
-        cnn_backbone,
         input_dim=1024,
         n_input=2,
         n_classes=2,
         lin_start=256,
         n_lin=3,
+        use_concat=True,
     ):
-        super(FeatureClassificationModel, self).__init__()
-        self.cnn_backbone = cnn_backbone
+        super(ClassificationHead, self).__init__()
         self.blocks = None
+        self.use_concat = use_concat
 
         previous_feature_size = n_input * input_dim
         # previous_feature_size = input_dim
@@ -225,7 +169,7 @@ class FeatureClassificationModel(nn.Module):
                 n_lin, self.block, previous_feature_size, current_feature_size
             )
             self.blocks = nn.Sequential(lin_layers)
-        self.age_gap = nn.Linear(last_feature_size, n_classes, bias=False)
+        self.class_layer = nn.Linear(last_feature_size, n_classes, bias=False)
 
     def block(self, in_features, out_features):
         lin = nn.Linear(in_features, out_features)
@@ -233,7 +177,7 @@ class FeatureClassificationModel(nn.Module):
         return nn.Sequential(lin, relu)
 
     def get_z(self, x):
-        z = self.cnn_backbone.features(x)
+        z = self.backbone.features(x)
         return z
 
     def forward(self, x):
@@ -241,11 +185,14 @@ class FeatureClassificationModel(nn.Module):
         z1 = self.get_z(x1)
         z2 = self.get_z(x2)
 
-        z = torch.cat([z1, z2], axis=-1)
-        # z = torch.sub(z1, z2)
+        if self.use_concat:
+            z = torch.cat([z1, z2], axis=-1)
+        else:
+            z = torch.sub(z1, z2)
+
         if self.blocks:
             z = self.blocks(z)
-        z = self.age_gap(z)
+        z = self.class_layer(z)
         return z
 
 

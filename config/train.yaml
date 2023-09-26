@@ -4,6 +4,16 @@ defaults:
   - _self_
   - log_dir: default.yaml
   - hparams_search: null
+  - dataset: null
+  - training: null
+  - models@backbone: null
+  - models@regression_head: null
+  - models@similarity_head: null
+  - losses@train_regression_loss: null
+  - losses@val_regression_loss: null
+  - losses@train_similarity_loss: null
+
+  # SHOULD BE LAST
   - experiment: null
 
-name: ${experiment.name}
+name: null

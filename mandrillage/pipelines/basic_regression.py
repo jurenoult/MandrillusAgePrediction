@@ -8,6 +8,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+import hydra
 
 from mandrillage.dataset import (
     MandrillImageDataset,
@@ -18,15 +19,10 @@ from mandrillage.dataset import (
     AugmentedSimilarityDataset,
 )
 from mandrillage.evaluations import standard_regression_evaluation
-from mandrillage.models import RegressionModel, DinoV2, FeatureClassificationModel
+from mandrillage.models import SequentialModel
 from mandrillage.pipeline import Pipeline
 from mandrillage.utils import load, save, split_indices, create_kfold_data
-from mandrillage.losses import (
-    BMCLoss,
-    ScalerLoss,
-    LinearWeighting,
-    AdaptiveMarginLoss,
-)
+
 
 log = logging.getLogger(__name__)
 
@@ -41,6 +37,7 @@ class NumpyEncoder(json.JSONEncoder):
 class BasicRegressionPipeline(Pipeline):
     def __init__(self):
         super(BasicRegressionPipeline, self).__init__()
+        self.sim_model = None
 
     def make_dataloader(self, dataset, shuffle=False):
         return DataLoader(
@@ -82,7 +79,7 @@ class BasicRegressionPipeline(Pipeline):
             training=True,
         )
 
-        if self.use_augmentation:
+        if self.config.training.use_augmentation:
             self.train_dataset = AugmentedDataset(self.train_dataset)
 
         self.train_similarity_dataset = MandrillSimilarityImageDataset(
@@ -94,7 +91,7 @@ class BasicRegressionPipeline(Pipeline):
         )
         self.train_similarity_dataset.set_images(self.train_dataset.images)
 
-        if self.use_augmentation:
+        if self.config.training.use_augmentation:
             self.train_similarity_dataset = AugmentedSimilarityDataset(
                 self.train_similarity_dataset
             )
@@ -117,107 +114,82 @@ class BasicRegressionPipeline(Pipeline):
         pass
 
     def init_model(self):
-        # self.backbone = VGGFace(
-        #     start_filters=self.vgg_start_filters, output_dim=self.vgg_output_dim
-        # )
-        # if self.vgg_face_pretrained_path:
-        #     if os.path.exists(self.vgg_face_pretrained_path):
-        #         self.backbone.load_weights(self.vgg_face_pretrained_path)
-        #     else:
-        #         log.error(
-        #             f"Could not find model path at {self.vgg_face_pretrained_path}"
-        #         )
-
-        self.backbone = DinoV2()
+        self.backbone = hydra.utils.instantiate(self.config.backbone)
         print(self.backbone)
+        if self.config.training.backbone_checkpoint:
+            if os.path.exists(self.config.training.backbone_checkpoint):
+                self.backbone.load_weights(self.config.training.backbone_checkpoint)
+            else:
+                log.error(
+                    f"Could not find model path at {self.config.training.backbone_checkpoint}"
+                )
 
-        # self.backbone = CoAtNetBackbone(output_dim=1024)
-        self.model = RegressionModel(
-            self.backbone,
-            input_dim=self.backbone.output_dim,
-            lin_start=self.regression_lin_start,
-            n_lin=self.regression_stages,
-        )
-        self.sim_model = FeatureClassificationModel(
-            cnn_backbone=self.backbone,
-            input_dim=self.backbone.output_dim,
-            n_classes=2,
-        )
+        self.config.regression_head.input_dim = self.backbone.output_dim
+        self.regression_head = hydra.utils.instantiate(self.config.regression_head)
+        print(self.regression_head)
+
+        self.model = SequentialModel(backbone=self.backbone, head=self.regression_head)
+
+        if self.config.similarity_head:
+            self.config.similarity_head.input_dim = self.backbone.output_dim
+            self.sim_model = hydra.utils.instantiate(self.config.similarity_head)
+            self.sim_model.backbone = self.backbone
 
         self.backbone = self.backbone.to(self.device)
         self.model = self.model.to(self.device)
-        self.sim_model = self.sim_model.to(self.device)
+        if self.sim_model:
+            self.sim_model = self.sim_model.to(self.device)
 
     def init_losses(self):
-        train_error_function = nn.MSELoss()
-        val_error_function = nn.L1Loss()
-        # days = 10
-        # min_days = days
-        # max_days = days
+        train_error_function = hydra.utils.instantiate(
+            self.config.train_regression_loss
+        )
+        val_error_function = hydra.utils.instantiate(self.config.val_regression_loss)
 
-        # train_error_function = AdaptiveMarginLoss(
-        #     min_days_error=min_days, max_days_error=max_days, max_days=self.max_days
-        # )
-        self.sim_criterion = nn.CrossEntropyLoss()
-        val_error_function = nn.L1Loss()
-        # val_error_function_margin = AdaptiveMarginLoss(
-        #     min_days_error=min_days, max_days_error=max_days, max_days=self.max_days
-        # )
+        if self.sim_model:
+            self.sim_criterion = hydra.utils.instantiate(
+                self.config.train_similarity_loss
+            )
 
         self.criterion = train_error_function
         self.val_criterions = {
             "L1": val_error_function,
-            # "marginloss": val_error_function_margin,
         }
         self.watch_val_loss = "L1"
 
-        # Losses
-        if self.linear_weighting:
-            self.mse_loss_weighting = LinearWeighting(
-                min_error=self.linear_weighting.min_age_error_max,
-                max_error=self.linear_weighting.max_age_error_max,
-                max_days=self.max_days,
-                error_function=train_error_function,
-            )
-            self.criterion = ScalerLoss(train_error_function, self.mse_loss_weighting)
-
-            self.l1_loss_weighting = LinearWeighting(
-                min_error=self.linear_weighting.min_age_error_max,
-                max_error=self.linear_weighting.max_age_error_max,
-                max_days=self.max_days,
-                error_function=val_error_function,
-            )
-
-            self.val_criterions = {
-                "L1": val_error_function,
-                "L1 scaled": ScalerLoss(val_error_function, self.l1_loss_weighting),
-                # "marginloss": val_error_function_margin,
-            }
-
-            self.watch_val_loss = "L1 scaled"
-
     def init_optimizers(self):
-        if not self.train_backbone:
+        if not self.config.training.train_backbone:
             # Freeze backbone parameters
             for param in self.backbone.parameters():
                 param.requires_grad = False
 
-        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        all_parameters = []
+        all_parameters += list(self.model.parameters())
+        if self.sim_model:
+            all_parameters += list(self.sim_model.parameters())
 
-        if isinstance(self.criterion, BMCLoss):
-            self.optimizer.add_param_group(
-                {
-                    "params": self.criterion.noise_sigma,
-                    "lr": 1e-2,
-                    "name": "noise_sigma",
-                }
-            )
+        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
 
     def init_callbacks(self):
         pass
 
     def init_loggers(self):
         pass
+
+    def mean_std(self, loader, model, device):
+        predictions = {}
+        for x_batch, y_batch in tqdm(loader, leave=True):
+            x_batch = x_batch.to(device)
+            y_pred_batch = model(x_batch)
+            for i in range(x_batch.shape[0]):
+                y, y_pred = y_batch[i], y_pred_batch[i]
+                if y not in predictions:
+                    predictions[y] = []
+                predictions[y].append(y_pred)
+        value_array = np.array(list(predictions.values()))
+        std_by_value = np.std(value_array, axis=-1)
+        print(std_by_value)
+        return np.mean(std_by_value)
 
     def train(self):
         steps = len(self.train_loader)
@@ -230,26 +202,13 @@ class BasicRegressionPipeline(Pipeline):
                 output_dir=self.output_dir,
             )
 
-        # Find best lr stuff
-        # find_lr = False
-        # if find_lr:
-        #     from torch_lr_finder import LRFinder
-
-        #     lr_finder = LRFinder(
-        #         self.model, self.optimizer, self.criterion, device=self.device
-        #     )
-        #     lr_finder.range_test(
-        #         self.train_loader, num_iter=50, start_lr=1e-7, end_lr=1
-        #     )
-        #     lr_finder.plot()  # to inspect the loss-learning rate graph
-        #     lr_finder.reset()  # to reset the model and optimizer to their initial state
-
         # Training loop
         best_val = np.inf
         pbar = tqdm(range(self.epochs))
         for epoch in pbar:
             self.model.train()  # Set the model to train mode
-            self.sim_model.train()
+            if self.sim_model:
+                self.sim_model.train()
             train_loss = 0.0
             train_sim_loss = 0.0
 
@@ -263,7 +222,7 @@ class BasicRegressionPipeline(Pipeline):
                 )
 
                 ### SIMILARITY LOSS
-                if self.sim_alpha > 0:
+                if self.config.training.sim_weight > 0 and self.sim_model:
                     x1, x2, y = next(
                         iter(
                             self.train_similarity_loader,
@@ -275,7 +234,10 @@ class BasicRegressionPipeline(Pipeline):
                     sim_loss = self.sim_criterion(y1, y)
 
                     # Disable regression loss
-                    loss = 0 * reg_loss + self.sim_alpha * sim_loss
+                    loss = (
+                        self.config.training.reg_weight * reg_loss
+                        + self.config.training.sim_weight * sim_loss
+                    )
                     train_sim_loss += sim_loss.item() * self.get_size(x1)
                 else:
                     loss = reg_loss
@@ -292,16 +254,10 @@ class BasicRegressionPipeline(Pipeline):
                 )
 
             train_loss /= len(self.train_dataset)
-            # self.criterion.display_stored_values(
-            #     os.path.join(self.output_dir, f"train_margin_epoch_{epoch}")
-            # )
 
             # Validation loop
             self.model.eval()  # Set the model to evaluation mode
-            self.sim_model.eval()
             val_losses = {}
-
-            # Store values for analysis
 
             with torch.no_grad():
                 for val_name, val_fnct in self.val_criterions.items():
@@ -309,6 +265,12 @@ class BasicRegressionPipeline(Pipeline):
                         self.val_loader, self.model, val_fnct, self.device
                     )
                     val_losses[val_name] /= len(self.val_dataset)
+
+                # Add mean std
+                mean_std = self.mean_std(
+                    loader=self.val_loader, model=self.model, device=self.device
+                )
+                val_losses["mean_std"] = mean_std
 
             val_loss = val_losses[self.watch_val_loss]
             if val_loss < best_val:
@@ -325,11 +287,6 @@ class BasicRegressionPipeline(Pipeline):
             else:
                 log.info(f"Val loss did not improved from {best_val:.4f}")
 
-            # Display stored values
-            # self.val_criterions["marginloss"].display_stored_values(
-            #     os.path.join(self.output_dir, f"val_margin_epoch_{epoch}")
-            # )
-
             # Print training and validation metrics
             val_str = " - ".join(
                 [f" val_{name}: {value:.5f}" for name, value in val_losses.items()]
@@ -338,6 +295,14 @@ class BasicRegressionPipeline(Pipeline):
                 f"Epoch [{epoch+1}/{self.epochs}] - "
                 f"Train Loss: {train_loss:.5f} - "
                 f"{val_str}"
+            )
+
+            # Save last iteration
+            save(
+                self.model,
+                f"regression_{self.train_index}_last",
+                exp_name=self.name,
+                output_dir=self.output_dir,
             )
 
     def predict_from_dataset(self, x):
@@ -434,14 +399,3 @@ class BasicRegressionPipeline(Pipeline):
 
     def init_parameters(self):
         super().init_parameters()
-
-        self.vgg_start_filters = self.config.model.vgg_start_filters
-        self.vgg_output_dim = self.config.model.vgg_output_dim
-        self.regression_lin_start = self.config.model.regression_lin_start
-        self.regression_stages = self.config.model.regression_stages
-        self.sim_alpha = self.config.training.sim_alpha
-        self.vgg_face_pretrained_path = self.config.model.pretrained
-
-        self.linear_weighting = self.config.training.linear_weighting
-        self.train_backbone = self.config.training.train_backbone
-        self.use_augmentation = self.config.training.use_augmentation
