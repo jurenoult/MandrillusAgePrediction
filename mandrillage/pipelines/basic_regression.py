@@ -268,6 +268,7 @@ class BasicRegressionPipeline(Pipeline):
                             self.train_similarity_loader,
                         )
                     )
+                    y = y.to(self.device)
                     x1, x2 = self.xy_to_device(x1, x2, self.device)
                     y1 = self.sim_model((x1, x2))
                     sim_loss = self.sim_criterion(y1, y)
