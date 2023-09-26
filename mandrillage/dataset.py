@@ -173,8 +173,8 @@ class AugmentedSimilarityDataset(AugmentedDataset):
         super(AugmentedSimilarityDataset, self).__init__(subset)
 
     def __getitem__(self, idx):
-        x1, x2 = self.subset[idx]
-        return self._augment(x1), self._augment(x2)
+        x1, x2, y = self.subset[idx]
+        return self._augment(x1), self._augment(x2), y
 
 
 class MandrillImageDataset(Dataset):
@@ -316,44 +316,102 @@ class MandrillSimilarityImageDataset(MandrillImageDataset):
         self.ids = individuals_ids
 
         self.valid_id_date = {}
-        valid_frames = self.df.groupby(["id", "shootdate"])
-        valid_frames = valid_frames.filter(lambda x: len(x) > 1)
+        valid_frames = self.df.groupby(["id", "age"])
+        valid_frames = valid_frames.filter(lambda x: len(x) > 0)
 
         for i, row in valid_frames.iterrows():
             _id = row["id"]
             if _id not in self.valid_id_date:
                 self.valid_id_date[_id] = []
-            shootdate = row["shootdate"]
-            if shootdate not in self.valid_id_date[_id]:
-                self.valid_id_date[_id].append(shootdate)
+            age = row["age"]
+            if age not in self.valid_id_date[_id]:
+                self.valid_id_date[_id].append(age)
 
-    def get_photo_pair(self, idx, shootdate):
-        candidates = self.df[
-            (self.df["id"] == idx) & (self.df["shootdate"] == shootdate)
-        ].index
-        candidates = list(candidates)
-        first_candidate_idx = random.randint(0, len(candidates) - 1)
-        first_candidate = candidates.pop(first_candidate_idx)
-        second_candidate_idx = random.randint(0, len(candidates) - 1)
-        second_candidate = candidates.pop(second_candidate_idx)
+    def take_random(self, array):
+        idx = random.randint(0, len(array) - 1)
+        return array.pop(idx)
 
-        return first_candidate, second_candidate
+    def extract_from_df(self, cond):
+        return list(self.df[cond].index)
+
+    def get_photo_pair(self, idx, age, is_same_mandrill, is_same_age):
+        # Get a random photo with idx and age
+        candidates = self.extract_from_df(
+            (self.df["id"] == idx) & (self.df["age"] == age)
+        )
+        # Get a photo from the list and remove it from the list of candidates
+        x1 = self.take_random(candidates)
+
+        if is_same_mandrill:
+            if is_same_age:  # Same mandrill same age
+                if len(candidates) == 0:
+                    is_same_age = False
+                else:
+                    x2 = self.take_random(candidates)
+
+            if not is_same_age:
+                candidates = self.extract_from_df(
+                    (self.df["id"] == idx) & (self.df["age"] != age)
+                )
+                # If there is only one age for this mandrill
+                # We must choose another mandrill
+                if len(candidates) == 0:
+                    is_same_mandrill = False
+                else:  # Same mandrill diff age
+                    x2 = self.take_random(candidates)
+
+        if not is_same_mandrill:
+            if is_same_age:
+                candidates = self.extract_from_df(
+                    (self.df["id"] != idx) & (self.df["age"] == age)
+                )
+                # If there are no other mandrill with same age
+                if len(candidates) == 0:
+                    is_same_age = False
+                else:  # Diff mandrills same age
+                    x2 = self.take_random(candidates)
+
+            if not is_same_age:  # Diff mandrills diff age
+                candidates = self.extract_from_df(
+                    (self.df["id"] != idx) & (self.df["age"] != age)
+                )
+                x2 = self.take_random(candidates)
+
+        return x1, x2
 
     def __len__(self):
         return len(self.valid_id_date)
 
     def __getitem__(self, idx):
         _id = list(self.valid_id_date.keys())[idx]
-        shootdates = self.valid_id_date[_id]
-        shootdate = shootdates[random.randint(0, len(shootdates) - 1)]
-        id1, id2 = self.get_photo_pair(_id, shootdate)
 
+        is_same_mandrill = np.random.choice([True, False])
+        is_same_age = np.random.choice([True, False])
+
+        ages = self.valid_id_date[_id]
+        age = ages[random.randint(0, len(ages) - 1)]
+
+        # This is an attempt at same mandrill & same age bool values
+        # However not all cases exist and we have to consider what samples
+        # have been taken to update whether the two photo have the same age or not
+        id1, id2 = self.get_photo_pair(_id, age, is_same_mandrill, is_same_age)
         x1, y1 = self._getpair(id1)
         x2, y2 = self._getpair(id2)
 
-        assert abs(y1 - y2) < 1
+        # Update the bool value based on what samples were drawn
+        is_same_age = abs(y1 - y2) < 1e-4
 
-        return x1, x2
+        # Only binary
+        y = torch.zeros([2])
+        y_index = 1 if is_same_age else 0
+        y[y_index] = 1
+
+        if is_same_age:
+            assert abs(y1 - y2) <= 1e-4, f"Expected same ages but got {y1} & {y2}"
+        else:
+            assert abs(y1 - y2) > 1e-4, f"Expected different ages but got {y1} & {y2}"
+
+        return x1, x2, y
 
 
 class ClassificationMandrillImageDataset(MandrillImageDataset):

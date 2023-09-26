@@ -18,13 +18,7 @@ from mandrillage.dataset import (
     AugmentedSimilarityDataset,
 )
 from mandrillage.evaluations import standard_regression_evaluation
-from mandrillage.models import (
-    RegressionModel,
-    VGGFace,
-    VoloBackbone,
-    CoAtNetBackbone,
-    DinoV2,
-)
+from mandrillage.models import RegressionModel, DinoV2, FeatureClassificationModel
 from mandrillage.pipeline import Pipeline
 from mandrillage.utils import load, save, split_indices, create_kfold_data
 from mandrillage.losses import (
@@ -32,7 +26,6 @@ from mandrillage.losses import (
     ScalerLoss,
     LinearWeighting,
     AdaptiveMarginLoss,
-    FeatureSimilarityLoss,
 )
 
 log = logging.getLogger(__name__)
@@ -139,13 +132,20 @@ class BasicRegressionPipeline(Pipeline):
         # self.backbone = CoAtNetBackbone(output_dim=1024)
         self.model = RegressionModel(
             self.backbone,
-            # input_dim=self.backbone.output_dim,
-            input_dim=384,
+            input_dim=self.backbone.output_dim,
             lin_start=self.regression_lin_start,
             n_lin=self.regression_stages,
         )
+        self.sim_model = FeatureClassificationModel(
+            cnn_backbone=self.backbone,
+            input_dim=self.backbone.output_dim,
+            n_classes=2,
+            n_lin=0,
+        )
+
         self.backbone = self.backbone.to(self.device)
         self.model = self.model.to(self.device)
+        self.sim_model = self.sim_model.to(self.device)
 
     def init_losses(self):
         train_error_function = nn.MSELoss()
@@ -157,7 +157,7 @@ class BasicRegressionPipeline(Pipeline):
         # train_error_function = AdaptiveMarginLoss(
         #     min_days_error=min_days, max_days_error=max_days, max_days=self.max_days
         # )
-        self.sim_criterion = nn.L1Loss()
+        self.sim_criterion = nn.CrossEntropyLoss()
         val_error_function = nn.L1Loss()
         # val_error_function_margin = AdaptiveMarginLoss(
         #     min_days_error=min_days, max_days_error=max_days, max_days=self.max_days
@@ -248,6 +248,7 @@ class BasicRegressionPipeline(Pipeline):
         pbar = tqdm(range(self.epochs))
         for epoch in pbar:
             self.model.train()  # Set the model to train mode
+            self.sim_model.train()
             train_loss = 0.0
             train_sim_loss = 0.0
 
@@ -262,14 +263,14 @@ class BasicRegressionPipeline(Pipeline):
 
                 ### SIMILARITY LOSS
                 if self.sim_alpha > 0:
-                    x1, x2 = next(
+                    x1, x2, y = next(
                         iter(
                             self.train_similarity_loader,
                         )
                     )
                     x1, x2 = self.xy_to_device(x1, x2, self.device)
-                    y1, y2 = self.model(x1), self.model(x2)
-                    sim_loss = self.sim_criterion(y1, y2)
+                    y1 = self.sim_model((x1, x2))
+                    sim_loss = self.sim_criterion(y1, y)
 
                     loss = reg_loss + self.sim_alpha * sim_loss
                     train_sim_loss += sim_loss.item() * self.get_size(x1)
@@ -294,6 +295,7 @@ class BasicRegressionPipeline(Pipeline):
 
             # Validation loop
             self.model.eval()  # Set the model to evaluation mode
+            self.sim_model.eval()
             val_losses = {}
 
             # Store values for analysis

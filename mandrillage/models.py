@@ -221,11 +221,12 @@ class FeatureClassificationModel(nn.Module):
         previous_feature_size = input_dim
         current_feature_size = lin_start
         last_feature_size = previous_feature_size
-        lin_layers, last_feature_size = build_layers(
-            n_lin, self.block, previous_feature_size, current_feature_size
-        )
-        self.blocks = nn.Sequential(lin_layers)
-        self.age_gap = nn.Linear(last_feature_size, n_classes)
+        if n_lin > 0:
+            lin_layers, last_feature_size = build_layers(
+                n_lin, self.block, previous_feature_size, current_feature_size
+            )
+            self.blocks = nn.Sequential(lin_layers)
+        self.age_gap = nn.Linear(last_feature_size, n_classes, bias=False)
 
     def block(self, in_features, out_features):
         lin = nn.Linear(in_features, out_features)
