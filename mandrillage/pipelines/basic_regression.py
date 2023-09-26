@@ -21,6 +21,7 @@ from mandrillage.dataset import (
 from mandrillage.evaluations import standard_regression_evaluation
 from mandrillage.models import SequentialModel
 from mandrillage.pipeline import Pipeline
+from mandrillage.display import display_predictions
 from mandrillage.utils import load, save, split_indices, create_kfold_data
 
 
@@ -183,13 +184,27 @@ class BasicRegressionPipeline(Pipeline):
             y_pred_batch = model(x_batch)
             for i in range(x_batch.shape[0]):
                 y, y_pred = y_batch[i], y_pred_batch[i]
+                y = int(y.detach().cpu().numpy() * self.max_days)
                 if y not in predictions:
                     predictions[y] = []
-                predictions[y].append(y_pred)
-        value_array = np.array(list(predictions.values()))
-        std_by_value = np.std(value_array, axis=-1)
-        print(std_by_value)
-        return np.mean(std_by_value)
+                predictions[y].append(
+                    int(y_pred.detach().cpu().numpy() * self.max_days)
+                )
+
+        std_by_value = {}
+        mean_by_value = {}
+        for y, values in predictions.items():
+            std_by_value[y] = np.std(np.array(values))
+            mean_by_value[y] = np.mean(np.array(values))
+
+        display_predictions(
+            predictions,
+            std_by_value,
+            mean_by_value,
+            os.path.join(self.output_dir, "latest_val_performance"),
+        )
+
+        return np.mean(list(std_by_value.values()))
 
     def train(self):
         steps = len(self.train_loader)
