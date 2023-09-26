@@ -143,7 +143,7 @@ class BasicRegressionPipeline(Pipeline):
         )
 
         self.backbone = self.backbone.to(self.device)
-        # self.model = self.model.to(self.device)
+        self.model = self.model.to(self.device)
         self.sim_model = self.sim_model.to(self.device)
 
     def init_losses(self):
