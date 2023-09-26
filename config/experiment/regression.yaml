@@ -38,4 +38,4 @@ model:
   regression_lin_start: 256
   # Number of stages in the regression head.
   # Each stage divides the number of neurons by two
-  regression_stages: 1
+  regression_stages: 0
