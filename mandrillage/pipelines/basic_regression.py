@@ -82,7 +82,8 @@ class BasicRegressionPipeline(Pipeline):
             training=True,
         )
 
-        self.train_dataset = AugmentedDataset(self.train_dataset)
+        if self.use_augmentation:
+            self.train_dataset = AugmentedDataset(self.train_dataset)
 
         self.train_similarity_dataset = MandrillSimilarityImageDataset(
             root_dir=self.dataset_images_path,
@@ -93,9 +94,10 @@ class BasicRegressionPipeline(Pipeline):
         )
         self.train_similarity_dataset.set_images(self.train_dataset.images)
 
-        self.train_similarity_dataset = AugmentedSimilarityDataset(
-            self.train_similarity_dataset
-        )
+        if self.use_augmentation:
+            self.train_similarity_dataset = AugmentedSimilarityDataset(
+                self.train_similarity_dataset
+            )
 
         self.val_dataset = MandrillImageDataset(
             root_dir=self.dataset_images_path,
@@ -442,3 +444,4 @@ class BasicRegressionPipeline(Pipeline):
 
         self.linear_weighting = self.config.training.linear_weighting
         self.train_backbone = self.config.training.train_backbone
+        self.use_augmentation = self.config.training.use_augmentation

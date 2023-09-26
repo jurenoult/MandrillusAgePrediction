@@ -25,6 +25,7 @@ training:
   epochs: 100
   sim_alpha: 0
   train_backbone: True
+  use_augmentation: True
   linear_weighting:
     min_age_error_max: 5
     max_age_error_max: 90
