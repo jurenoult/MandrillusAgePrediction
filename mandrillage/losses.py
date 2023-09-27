@@ -5,14 +5,16 @@ import torch.nn.functional as F
 
 
 class MSEVariance(nn.Module):
-    def __init__(self):
+    def __init__(self, sigma_weight=1.0, mse_weight=1.0):
         super(MSEVariance, self).__init__()
         self.loss = nn.MSELoss()
+        self.sigma_weight = sigma_weight
+        self.mse_weight = mse_weight
 
     def forward(self, y_pred, y_true):
         sigma = torch.mean(torch.var(y_pred))
         mse_value = self.loss(y_pred, y_true)
-        return sigma + mse_value
+        return self.sigma_weight * sigma + self.mse_weight * mse_value
 
 
 class FeatureSimilarityLoss(nn.Module):

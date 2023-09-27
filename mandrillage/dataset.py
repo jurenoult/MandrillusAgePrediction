@@ -188,13 +188,16 @@ class Sampler:
         self.batch_size = batch_size
 
     def __iter__(self):
+        # Select the classes of the batch randomly
         classes = random.sample(range(len(self.classes)), self.class_per_batch)
 
         batches = []
         for _ in range(self.n_batches):
             batch = []
             for i in range(self.batch_size):
+                # Select a class from the selected classes
                 klass = random.choice(classes)
+                # Randomly select element of the class
                 batch.append(random.choice(self.classes[klass]))
             batches.append(batch)
         return iter(batches)
