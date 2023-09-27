@@ -241,9 +241,15 @@ class MandrillImageDataset(Dataset):
                 row = self.df.iloc[[i]]
                 self.images.append(self.load_photo(row))
                 age = row["age"].values[0]
-                if age not in self.data_classes:
-                    self.data_classes[age] = []
-                self.data_classes[age].append(i)
+                _id = row["id"]
+
+                # by age & by id
+                age_id = f"{_id}_{age}"
+
+                if age_id not in self.data_classes:
+                    self.data_classes[age_id] = []
+
+                self.data_classes[age_id].append(i)
 
         # if self.training:
         #     self.partition_by_age()
