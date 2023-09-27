@@ -110,13 +110,11 @@ class BasicRegressionPipeline(Pipeline):
             individuals_ids=self.val_indices,
         )
 
-        s = Sampler(
-            self.train_dataset.classes(), class_per_batch=1, batch_size=self.batch_size
-        )
+        # s = Sampler(
+        #     self.train_dataset.classes(), class_per_batch=1, batch_size=self.batch_size
+        # )
 
-        self.train_loader = self.make_dataloader(
-            self.train_dataset, shuffle=True, sampler=s
-        )
+        self.train_loader = self.make_dataloader(self.train_dataset, shuffle=True)
         self.train_similarity_loader = self.make_dataloader(
             self.train_similarity_dataset, shuffle=True
         )
