@@ -6,6 +6,7 @@ import numpy as np
 import torch
 from omegaconf import OmegaConf
 from tqdm import tqdm
+import mlflow
 
 log = logging.getLogger(__name__)
 
@@ -20,6 +21,33 @@ class Pipeline(object):
         self.config = config
         self.output_dir = output_dir
         self.init_parameters()
+
+        exps = mlflow.search_experiments(filter_string=f"name='{self.name}'")
+        print(exps)
+        if exps is None or len(exps) == 0:
+            mlflow.create_experiment(self.name)
+
+        self.current_mlflow_xp = mlflow.set_experiment(self.name)
+        runs = mlflow.search_runs(experiment_names=[self.current_mlflow_xp.name])
+        print(runs)
+        run_index = 0
+        if runs is not None and len(runs) > 0:
+            run_index = len(runs)
+
+        self.mlflow_run = mlflow.start_run(run_name=f"{self.name}_{run_index}")
+        mlflow.log_params(self.config)
+        mlflow.log_param("learning_rate", self.config.training.learning_rate)
+        mlflow.log_param("batch_size", self.config.training.batch_size)
+        mlflow.log_param("epochs", self.config.training.epochs)
+        mlflow.log_param("train_backbone", self.config.training.train_backbone)
+        mlflow.log_param("use_augmentation", self.config.training.use_augmentation)
+        mlflow.log_param("backbone_target", self.config.backbone._target_)
+        mlflow.log_param("regression_head_stages", self.config.regression_head.n_lin)
+        mlflow.log_param(
+            "regression_head_start_neurons", self.config.regression_head.lin_start
+        )
+        mlflow.log_param("train_loss_type", self.config.train_regression_loss._target_)
+        mlflow.log_param("val_loss_type", self.config.val_regression_loss._target_)
 
     def init_parameters(self):
         self.name = self.config.name

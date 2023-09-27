@@ -9,6 +9,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import hydra
+import mlflow
 
 from mandrillage.dataset import (
     MandrillImageDataset,
@@ -125,7 +126,7 @@ class BasicRegressionPipeline(Pipeline):
 
     def init_model(self):
         self.backbone = hydra.utils.instantiate(self.config.backbone)
-        print(self.backbone)
+
         if self.config.training.backbone_checkpoint:
             if os.path.exists(self.config.training.backbone_checkpoint):
                 self.backbone.load_weights(self.config.training.backbone_checkpoint)
@@ -279,6 +280,8 @@ class BasicRegressionPipeline(Pipeline):
             log.info(train_description_str)
             train_loss /= len(self.train_dataset)
 
+            mlflow.log_metric("train_loss", train_loss, step=epoch)
+
             # Validation loop
             self.model.eval()  # Set the model to evaluation mode
             val_losses = {}
@@ -310,6 +313,10 @@ class BasicRegressionPipeline(Pipeline):
                 )
             else:
                 log.info(f"Val loss did not improved from {best_val:.4f}")
+
+            mlflow.log_metric("val_loss", val_loss, step=epoch)
+            mlflow.log_metric("val_loss_std", val_losses["mean_std"], step=epoch)
+            mlflow.log_metric("best_val_loss", best_val, step=epoch)
 
             # Print training and validation metrics
             val_str = " - ".join(
