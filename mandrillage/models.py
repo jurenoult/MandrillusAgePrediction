@@ -132,12 +132,14 @@ class RegressionHead(nn.Module):
 
 
 class DinoV2(nn.Module):
-    def __init__(
-        self,
-    ):
+    def __init__(self, dino_type: str):
         super(DinoV2, self).__init__()
-        self.backbone = torch.hub.load("facebookresearch/dinov2", "dinov2_vits14")
         self.output_dim = 384
+        if dino_type == "small":
+            self.backbone = torch.hub.load("facebookresearch/dinov2", "dinov2_vits14")
+        if dino_type == "medium":
+            self.output_dim = 768
+            self.backbone = torch.hub.load("facebookresearch/dinov2", "dinov2_vitb14")
 
     def features(self, x):
         return self.backbone(x)
