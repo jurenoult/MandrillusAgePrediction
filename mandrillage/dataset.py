@@ -167,6 +167,9 @@ class AugmentedDataset(Dataset):
         x, y = self.subset[idx]
         return self._augment(x), y
 
+    def classes(self):
+        return self.subset.classes()
+
 
 class AugmentedSimilarityDataset(AugmentedDataset):
     def __init__(self, subset):
@@ -175,6 +178,29 @@ class AugmentedSimilarityDataset(AugmentedDataset):
     def __getitem__(self, idx):
         x1, x2, y = self.subset[idx]
         return self._augment(x1), self._augment(x2), y
+
+
+class Sampler:
+    def __init__(self, classes, class_per_batch, batch_size):
+        self.classes = classes
+        self.n_batches = sum([len(x) for x in classes]) // batch_size
+        self.class_per_batch = class_per_batch
+        self.batch_size = batch_size
+
+    def __iter__(self):
+        classes = random.sample(range(len(self.classes)), self.class_per_batch)
+
+        batches = []
+        for _ in range(self.n_batches):
+            batch = []
+            for i in range(self.batch_size):
+                klass = random.choice(classes)
+                batch.append(random.choice(self.classes[klass]))
+            batches.append(batch)
+        return iter(batches)
+
+    def __len__(self):
+        return self.n_batches
 
 
 class MandrillImageDataset(Dataset):
@@ -205,11 +231,16 @@ class MandrillImageDataset(Dataset):
             self.df = self.df[self.df["id"].isin(individuals_ids)]
             self.df.reset_index(drop=True, inplace=True)
 
+        self.data_classes = {}
         if self.in_mem:
             self.images = []
             for i in tqdm(range(len(self.df))):
                 row = self.df.iloc[[i]]
                 self.images.append(self.load_photo(row))
+                age = row["age"].values[0]
+                if age not in self.data_classes:
+                    self.data_classes[age] = []
+                self.data_classes[age].append(i)
 
         # if self.training:
         #     self.partition_by_age()
@@ -298,6 +329,9 @@ class MandrillImageDataset(Dataset):
         #     partition_index = idx % len(self.age_partitions)
         #     idx = random.choice(self.age_partitions[partition_index])
         return self._getpair(idx)
+
+    def classes(self):
+        return list(self.data_classes.values())
 
 
 class MandrillSimilarityImageDataset(MandrillImageDataset):

@@ -1,5 +1,5 @@
 import hydra
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 import mlflow.pytorch
 from mlflow import MlflowClient
@@ -16,6 +16,7 @@ def print_auto_logged_info(r):
 
 
 def run(config: DictConfig):
+    OmegaConf.resolve(config)
     pipeline = hydra.utils.instantiate(config.pipeline)
 
     hydra_cfg = hydra.core.hydra_config.HydraConfig.get()

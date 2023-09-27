@@ -17,13 +17,13 @@ from mandrillage.dataset import (
     resample,
     AugmentedDataset,
     AugmentedSimilarityDataset,
+    Sampler,
 )
 from mandrillage.evaluations import standard_regression_evaluation
 from mandrillage.models import SequentialModel
 from mandrillage.pipeline import Pipeline
 from mandrillage.display import display_predictions
 from mandrillage.utils import load, save, split_indices, create_kfold_data
-
 
 log = logging.getLogger(__name__)
 
@@ -40,7 +40,12 @@ class BasicRegressionPipeline(Pipeline):
         super(BasicRegressionPipeline, self).__init__()
         self.sim_model = None
 
-    def make_dataloader(self, dataset, shuffle=False):
+    def make_dataloader(self, dataset, shuffle=False, sampler=None):
+        if sampler:
+            return DataLoader(
+                dataset,
+                batch_sampler=sampler,
+            )
         return DataLoader(
             dataset,
             batch_size=self.batch_size,
@@ -105,7 +110,13 @@ class BasicRegressionPipeline(Pipeline):
             individuals_ids=self.val_indices,
         )
 
-        self.train_loader = self.make_dataloader(self.train_dataset, shuffle=True)
+        s = Sampler(
+            self.train_dataset.classes(), class_per_batch=1, batch_size=self.batch_size
+        )
+
+        self.train_loader = self.make_dataloader(
+            self.train_dataset, shuffle=True, sampler=s
+        )
         self.train_similarity_loader = self.make_dataloader(
             self.train_similarity_dataset, shuffle=True
         )
@@ -142,6 +153,7 @@ class BasicRegressionPipeline(Pipeline):
             self.sim_model = self.sim_model.to(self.device)
 
     def init_losses(self):
+        print(self.config.train_regression_loss)
         train_error_function = hydra.utils.instantiate(
             self.config.train_regression_loss
         )
@@ -264,12 +276,9 @@ class BasicRegressionPipeline(Pipeline):
                 train_loss += reg_loss.item() * reg_size
 
                 n_samples = self.batch_size * (i + 1)
-                pbar.set_description(
-                    f"Regression train loss: {(train_loss/n_samples):.5f} - Similarity train loss: {(train_sim_loss/n_samples):.5f}"  # - Weight slope : {self.criterion.weight.a}"
-                )
-            log.info(
-                f"Regression train loss: {(train_loss/n_samples):.5f} - Similarity classification train loss: {(train_sim_loss/n_samples):.5f}"  # - Weight slope : {self.criterion.weight.a}"
-            )
+                train_description_str = f"Regression train loss: {(train_loss/n_samples):.5f} - Similarity train loss: {(train_sim_loss/n_samples):.5f}"
+                pbar.set_description(train_description_str)
+            log.info(train_description_str)
             train_loss /= len(self.train_dataset)
 
             # Validation loop
