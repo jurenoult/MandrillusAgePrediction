@@ -267,7 +267,9 @@ class BasicRegressionPipeline(Pipeline):
                 pbar.set_description(
                     f"Regression train loss: {(train_loss/n_samples):.5f} - Similarity train loss: {(train_sim_loss/n_samples):.5f}"  # - Weight slope : {self.criterion.weight.a}"
                 )
-
+            log.info(
+                f"Regression train loss: {(train_loss/n_samples):.5f} - Similarity classification train loss: {(train_sim_loss/n_samples):.5f}"  # - Weight slope : {self.criterion.weight.a}"
+            )
             train_loss /= len(self.train_dataset)
 
             # Validation loop

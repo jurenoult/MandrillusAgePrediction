@@ -308,6 +308,7 @@ class MandrillSimilarityImageDataset(MandrillImageDataset):
         img_size=(224, 224),
         in_mem=True,
         max_days=1,
+        similarity_threshold=None,
         individuals_ids=[],
     ):
         super(MandrillSimilarityImageDataset, self).__init__(
@@ -326,6 +327,8 @@ class MandrillSimilarityImageDataset(MandrillImageDataset):
             age = row["age"]
             if age not in self.valid_id_date[_id]:
                 self.valid_id_date[_id].append(age)
+
+        self.similarity_threshold = similarity_threshold
 
     def take_random(self, array):
         idx = random.randint(0, len(array) - 1)
@@ -382,6 +385,22 @@ class MandrillSimilarityImageDataset(MandrillImageDataset):
     def __len__(self):
         return len(self.valid_id_date)
 
+    def compute_is_same_age(self, y1, y2):
+        age_distance = abs(y1 - y2)
+        if self.similarity_threshold is None:
+            return age_distance < 1e-6
+
+        # Get the threshold for each age
+        y1_threshold = self.similarity_threshold.factor * y1
+        y2_threshold = self.similarity_threshold.factor * y2
+        # Take the max
+        max_threshold = max(y1_threshold, y2_threshold)
+        threshold = min(
+            max_threshold, self.similarity_threshold.min_days / self.max_days
+        )
+
+        return age_distance < threshold
+
     def __getitem__(self, idx):
         _id = list(self.valid_id_date.keys())[idx]
 
@@ -399,17 +418,12 @@ class MandrillSimilarityImageDataset(MandrillImageDataset):
         x2, y2 = self._getpair(id2)
 
         # Update the bool value based on what samples were drawn
-        is_same_age = abs(y1 - y2) < 1e-6
+        is_same_age = self.compute_is_same_age(y1, y2)
 
         # Only binary
         y = torch.zeros([2])
         y_index = 1 if is_same_age else 0
         y[y_index] = 1
-
-        if is_same_age:
-            assert abs(y1 - y2) <= 1e-6, f"Expected same ages but got {y1} & {y2}"
-        else:
-            assert abs(y1 - y2) > 1e-6, f"Expected different ages but got {y1} & {y2}"
 
         return x1, x2, y
 
