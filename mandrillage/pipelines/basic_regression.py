@@ -330,6 +330,7 @@ class BasicRegressionPipeline(Pipeline):
                 exp_name=self.name,
                 output_dir=self.output_dir,
             )
+        return best_val
 
     def predict_from_dataset(self, x):
         z = torch.unsqueeze(x, axis=0)
