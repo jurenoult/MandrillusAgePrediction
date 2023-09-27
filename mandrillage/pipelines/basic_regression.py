@@ -208,14 +208,14 @@ class BasicRegressionPipeline(Pipeline):
             std_by_value[y] = np.std(np.array(values))
             mean_by_value[y] = np.mean(np.array(values))
 
-        display_predictions(
+        fig = display_predictions(
             predictions,
             std_by_value,
             mean_by_value,
             os.path.join(self.output_dir, "latest_val_performance"),
         )
 
-        return np.mean(list(std_by_value.values()))
+        return np.mean(list(std_by_value.values())), fig
 
     def train(self):
         steps = len(self.train_loader)
@@ -294,10 +294,11 @@ class BasicRegressionPipeline(Pipeline):
                     val_losses[val_name] /= len(self.val_dataset)
 
                 # Add mean std
-                mean_std = self.mean_std(
+                mean_std, fig = self.mean_std(
                     loader=self.val_loader, model=self.model, device=self.device
                 )
                 val_losses["mean_std"] = mean_std
+                mlflow.log_figure(fig, "mean_std")
 
             val_loss = val_losses[self.watch_val_loss]
             if val_loss < best_val:

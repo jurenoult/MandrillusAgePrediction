@@ -38,6 +38,8 @@ def display_predictions(
     plt.savefig(f"{output_path}.png")
     plt.close()
 
+    return fig
+
 
 def compute_projection(model, dataloader, device):
     model.eval()
