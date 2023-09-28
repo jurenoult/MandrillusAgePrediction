@@ -125,6 +125,25 @@ def resample(df, bins):
 
 import albumentations as A
 
+AUGMENTATION_PIPELINE = A.Compose(
+    [
+        A.Flip(p=0.5),
+        A.ShiftScaleRotate(
+            p=0.5,
+            shift_limit=0.0,
+            scale_limit=0.95,
+            rotate_limit=45,
+            border_mode=cv2.BORDER_CONSTANT,
+        ),
+        A.OneOf(
+            [A.Blur(blur_limit=5, p=1.0), A.Defocus(alias_blur=(0.1, 0.2), p=1.0)],
+            p=0.5,
+        ),
+        A.CoarseDropout(max_holes=3, max_height=16, max_width=16, min_holes=1),
+    ],
+    p=0.5,
+)
+
 # AUGMENTATION_PIPELINE = A.Compose(
 #     [
 #         A.Flip(p=0.5),
@@ -168,22 +187,6 @@ AUGMENTATION_PIPELINE = A.Compose(
     ],
     p=0.5,
 )
-
-
-# self.aug = iaa.Sequential([
-#             iaa.OneOf([
-#                 iaa.Sometimes(0.25, iaa.AdditiveGaussianNoise(scale=0.1 * 255)),
-#                 iaa.Sometimes(0.25, iaa.GaussianBlur(sigma=(0, 3.0)))
-#                 ]),
-#             iaa.Affine(
-#                 rotate=(-20, 20), mode="edge",
-#                 scale={"x": (0.95, 1.05), "y": (0.95, 1.05)},
-#                 translate_percent={"x": (-0.05, 0.05), "y": (-0.05, 0.05)}
-#             ),
-#             iaa.AddToHueAndSaturation(value=(-10, 10), per_channel=True),
-#             iaa.GammaContrast((0.3, 2)),
-#             iaa.Fliplr(0.5),
-#         ])
 
 
 class AugmentedDataset(Dataset):

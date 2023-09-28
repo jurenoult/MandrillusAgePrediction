@@ -298,7 +298,7 @@ class BasicRegressionPipeline(Pipeline):
                     loader=self.val_loader, model=self.model, device=self.device
                 )
                 val_losses["mean_std"] = mean_std
-                mlflow.log_figure(fig, "mean_std")
+                # mlflow.log_figure(fig, "mean_std")
 
             val_loss = val_losses[self.watch_val_loss]
             if val_loss < best_val:
