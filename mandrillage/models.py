@@ -140,6 +140,10 @@ class DinoV2(nn.Module):
         if dino_type == "medium":
             self.output_dim = 768
             self.backbone = torch.hub.load("facebookresearch/dinov2", "dinov2_vitb14")
+        if dino_type == "large":
+            self.backbone = torch.hub.load(
+                "facebookresearch/dinov2", "dinov2_vitl14_lc"
+            )
 
     def features(self, x):
         return self.backbone(x)
@@ -586,23 +590,25 @@ class VGGFace(nn.Module):
     def features(self, x):
         x = self.bn_1_1(F.relu(self.conv_1_1(x)))
         x = self.bn_1_2(F.relu(self.conv_1_2(x)))
-        x = F.max_pool2d(x, 2, 2)
+        x = F.max_pool2d(x, 2, 2)  # 224 -> 112
         x = self.bn_2_1(F.relu(self.conv_2_1(x)))
         x = self.bn_2_2(F.relu(self.conv_2_2(x)))
-        x = F.max_pool2d(x, 2, 2)
+        x = F.max_pool2d(x, 2, 2)  # 112 -> 56
         x = self.bn_3_1(F.relu(self.conv_3_1(x)))
         x = self.bn_3_2(F.relu(self.conv_3_2(x)))
         x = self.bn_3_3(F.relu(self.conv_3_3(x)))
-        x = F.max_pool2d(x, 2, 2)
+        x = F.max_pool2d(x, 2, 2)  # 56 -> 28
         x = self.bn_4_1(F.relu(self.conv_4_1(x)))
         x = self.bn_4_2(F.relu(self.conv_4_2(x)))
         x = self.bn_4_3(F.relu(self.conv_4_3(x)))
-        x = F.max_pool2d(x, 2, 2)
+        x = F.max_pool2d(x, 2, 2)  # 28 -> 14
         x = self.bn_5_1(F.relu(self.conv_5_1(x)))
         x = self.bn_5_2(F.relu(self.conv_5_2(x)))
         x = self.bn_5_3(F.relu(self.conv_5_3(x)))
-        x = F.max_pool2d(x, 2, 2)
-        x = x.view(x.size(0), -1)
+        x = F.max_pool2d(x, 2, 2)  # 14 -> 7
+        x = x.view(
+            x.size(0), -1
+        )  # 7x7x512 => This part is used as features for age regression in deepface
         x = self.bn_6(F.relu(self.fc6(x)))
         x = F.dropout(x, 0.5, self.training)
         x = self.bn_7(F.relu(self.fc7(x)))
