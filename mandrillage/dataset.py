@@ -125,24 +125,6 @@ def resample(df, bins):
 
 import albumentations as A
 
-AUGMENTATION_PIPELINE = A.Compose(
-    [
-        A.Flip(p=0.5),
-        A.ShiftScaleRotate(
-            p=0.5,
-            shift_limit=0.0,
-            scale_limit=0.95,
-            rotate_limit=45,
-            border_mode=cv2.BORDER_CONSTANT,
-        ),
-        A.OneOf(
-            [A.Blur(blur_limit=5, p=1.0), A.Defocus(alias_blur=(0.1, 0.2), p=1.0)],
-            p=0.5,
-        ),
-        A.CoarseDropout(max_holes=3, max_height=16, max_width=16, min_holes=1),
-    ],
-    p=0.5,
-)
 
 # AUGMENTATION_PIPELINE = A.Compose(
 #     [
@@ -168,8 +150,8 @@ AUGMENTATION_PIPELINE = A.Compose(
     [
         A.OneOf(
             [
-                A.GaussianBlur(sigma_limit=0.3, p=1.0),
-                A.GaussNoise(var_limit=0.1, p=1.0),
+                A.GaussianBlur(p=1.0),
+                A.GaussNoise(var_limit=(30, 50), mean=10, p=1.0),
             ],
             p=0.5,
         ),
@@ -181,7 +163,7 @@ AUGMENTATION_PIPELINE = A.Compose(
             border_mode=cv2.BORDER_CONSTANT,
         ),
         A.HueSaturationValue(hue_shift_limit=5, sat_shift_limit=40, p=0.5),
-        A.RandomGamma(gamma_limit=(50, 90), p=0.5),
+        A.RandomGamma(gamma_limit=(50, 80), p=0.5),
         A.RandomContrast(limit=0.4, p=0.5),
         A.HorizontalFlip(p=0.5),
     ],
