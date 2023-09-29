@@ -1,12 +1,10 @@
 import torch.nn as nn
 from collections import OrderedDict
 from coral_pytorch.layers import CoralLayer
-import timm
 import torch
 import volo
-from volo import volo_d1
+from volo.utils import load_pretrained_weights
 import torchfile
-from torch.nn.utils import weight_norm
 from torch.nn.init import trunc_normal_
 
 
@@ -26,16 +24,34 @@ class VoloBackbone(nn.Module):
     def __init__(
         self,
         base_name: str = "volo_d1",
-        pretrained=True,
     ):
         """Initialize"""
         self.base_name = base_name
         super().__init__()
 
-        base_model = volo.volo_d1(pretrained=pretrained, return_dense=False)
-        base_model.reset_classifier(num_classes=0)
+        if base_name == "volo_d1":
+            base_model = volo.volo_d1()
+            self.output_dim = 384
+        if base_name == "volo_d2":
+            base_model = volo.volo_d2()
+            self.output_dim = 512
+        if base_name == "volo_d3":
+            base_model = volo.volo_d3()
+            self.output_dim = 512
+        if base_name == "volo_d4":
+            base_model = volo.volo_d4()
+            self.output_dim = 768
+        if base_name == "volo_d5":
+            base_model = volo.volo_d5()
+            self.output_dim = 768
+
+        # base_model.reset_classifier(num_classes=0)
         self.backbone = base_model
-        self.output_dim = 384
+
+    def load_weights(self, path):
+        load_pretrained_weights(self.backbone, path)
+        self.backbone.return_dense = False
+        self.backbone.reset_classifier(num_classes=0)
 
     def features(self, x):
         x_cls = self.forward(x)
@@ -44,6 +60,7 @@ class VoloBackbone(nn.Module):
     def forward(self, x):
         """Forward"""
         h = self.backbone(x)
+        print(x.shape)
         return h
 
 
