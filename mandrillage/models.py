@@ -6,6 +6,7 @@ import volo
 from volo.utils import load_pretrained_weights
 import torchfile
 from torch.nn.init import trunc_normal_
+import timm
 
 
 class SequentialModel(nn.Module):
@@ -30,8 +31,9 @@ class VoloBackbone(nn.Module):
         super().__init__()
 
         if base_name == "volo_d1":
-            base_model = volo.volo_d1()
-            self.output_dim = 384
+            base_model = timm.create_model("volo_d1_224")
+            # base_model = volo.volo_d1()
+            self.output_dim = 384 * 197
         if base_name == "volo_d2":
             base_model = volo.volo_d2()
             self.output_dim = 512
@@ -54,14 +56,14 @@ class VoloBackbone(nn.Module):
         self.backbone.reset_classifier(num_classes=0)
 
     def features(self, x):
-        x_cls = self.forward(x)
-        return x_cls
+        x = self.backbone.forward_features(x)
+        x = x.view(x.size(0), -1)
+        return x
 
     def forward(self, x):
         """Forward"""
-        h = self.backbone(x)
-        print(x.shape)
-        return h
+        x = self.features(x)
+        return x
 
 
 def build_layers(n, method, prev_features, current_features, down=True):
