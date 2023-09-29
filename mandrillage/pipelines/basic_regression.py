@@ -134,7 +134,11 @@ class BasicRegressionPipeline(Pipeline):
                     log.info(
                         f"Backbone weights loaded from {self.config.training.backbone_checkpoint}"
                     )
-                except Exception:
+                except Exception as err:
+                    log.error(err)
+                    log.error(
+                        f"Failed to load backbone weights directly from {self.config.training.backbone_checkpoint}"
+                    )
                     try:
                         model = torch.load(self.config.training.backbone_checkpoint)
                         self.backbone = model.backbone
