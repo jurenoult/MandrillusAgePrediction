@@ -531,6 +531,7 @@ class VGGFace(nn.Module):
         self.fc8 = nn.Linear(start_filters * 64, output_dim)
         self.create_bn()
 
+        self.last_output_dim = output_dim
         self.output_dim = start_filters * 8 * 7 * 7
 
     def load_weights(self, path="data/pretrained/VGG_FACE.t7"):
@@ -542,8 +543,8 @@ class VGGFace(nn.Module):
             path: path for the luatorch pretrained
         """
         assert (
-            self.start_filters == 64 and self.output_dim == 2622
-        ), "You must use the correct model size to load the pretrained weight"
+            self.start_filters == 64 and self.last_output_dim == 2622
+        ), "You must use the correct model size to load the pretrained weight."
         model = torchfile.load(path)
         counter = 1
         block = 1
