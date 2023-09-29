@@ -129,7 +129,14 @@ class BasicRegressionPipeline(Pipeline):
 
         if self.config.training.backbone_checkpoint:
             if os.path.exists(self.config.training.backbone_checkpoint):
-                self.backbone.load_weights(self.config.training.backbone_checkpoint)
+                try:
+                    self.backbone.load_weights(self.config.training.backbone_checkpoint)
+                except Exception:
+                    try:
+                        model = torch.load(self.config.training.backbone_checkpoint)
+                        self.backbone = model.backbone
+                    except Exception:
+                        print("Failed to load backbone model")
             else:
                 log.error(
                     f"Could not find model path at {self.config.training.backbone_checkpoint}"
