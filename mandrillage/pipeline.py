@@ -23,13 +23,11 @@ class Pipeline(object):
         self.init_parameters()
 
         exps = mlflow.search_experiments(filter_string=f"name='{self.name}'")
-        print(exps)
         if exps is None or len(exps) == 0:
             mlflow.create_experiment(self.name)
 
         self.current_mlflow_xp = mlflow.set_experiment(self.name)
         runs = mlflow.search_runs(experiment_names=[self.current_mlflow_xp.name])
-        print(runs)
         run_index = 0
         if runs is not None and len(runs) > 0:
             run_index = len(runs)
@@ -240,5 +238,7 @@ class Pipeline(object):
             self.score = test_score
 
         log.info(f"Final score : {self.score}")
+
+        mlflow.end_run()
 
         return self.score

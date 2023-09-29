@@ -131,12 +131,18 @@ class BasicRegressionPipeline(Pipeline):
             if os.path.exists(self.config.training.backbone_checkpoint):
                 try:
                     self.backbone.load_weights(self.config.training.backbone_checkpoint)
+                    log.info(
+                        f"Backbone weights loaded from {self.config.training.backbone_checkpoint}"
+                    )
                 except Exception:
                     try:
                         model = torch.load(self.config.training.backbone_checkpoint)
                         self.backbone = model.backbone
+                        log.info(
+                            f"Backbone loaded from full model at {self.config.training.backbone_checkpoint}"
+                        )
                     except Exception:
-                        print("Failed to load backbone model")
+                        log.error("Failed to load backbone model")
             else:
                 log.error(
                     f"Could not find model path at {self.config.training.backbone_checkpoint}"
