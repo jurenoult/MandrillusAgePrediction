@@ -490,7 +490,6 @@ class VGGFace(nn.Module):
         super().__init__()
 
         self.start_filters = start_filters
-        self.output_dim = output_dim
         self.block_size = [2, 2, 3, 3, 3]
         self.conv_1_1 = nn.Conv2d(3, start_filters, 3, stride=1, padding=1)
         self.conv_1_2 = nn.Conv2d(start_filters, start_filters, 3, stride=1, padding=1)
@@ -531,6 +530,8 @@ class VGGFace(nn.Module):
         self.fc7 = nn.Linear(start_filters * 64, start_filters * 64)
         self.fc8 = nn.Linear(start_filters * 64, output_dim)
         self.create_bn()
+
+        self.output_dim = start_filters * 8 * 7 * 7
 
     def load_weights(self, path="data/pretrained/VGG_FACE.t7"):
         """Function to load luatorch pretrained
@@ -610,13 +611,13 @@ class VGGFace(nn.Module):
         x = x.view(
             x.size(0), -1
         )  # 7x7x512 => This part is used as features for age regression in deepface
-        x = self.bn_6(F.relu(self.fc6(x)))
-        x = F.dropout(x, 0.5, self.training)
-        x = self.bn_7(F.relu(self.fc7(x)))
-        x = F.dropout(x, 0.5, self.training)
-        x = self.fc8(x)
+        # x = self.bn_6(F.relu(self.fc6(x)))
+        # x = F.dropout(x, 0.5, self.training)
+        # x = self.bn_7(F.relu(self.fc7(x)))
+        # x = F.dropout(x, 0.5, self.training)
+        # x = self.fc8(x)
 
-        x = torch.flatten(x, start_dim=1)
+        # x = torch.flatten(x, start_dim=1)
         return x
 
     def forward(self, x):

@@ -165,7 +165,6 @@ class BasicRegressionPipeline(Pipeline):
             self.sim_model = self.sim_model.to(self.device)
 
     def init_losses(self):
-        print(self.config.train_regression_loss)
         train_error_function = hydra.utils.instantiate(
             self.config.train_regression_loss
         )
