@@ -35,16 +35,16 @@ class VoloBackbone(nn.Module):
             self.output_dim = 384 * 197
         if base_name == "volo_d2":
             base_model = timm.create_model("volo_d2_224")
-            self.output_dim = 512
+            self.output_dim = 512 * 197
         if base_name == "volo_d3":
             base_model = timm.create_model("volo_d3_224")
-            self.output_dim = 512
+            self.output_dim = 512 * 197
         if base_name == "volo_d4":
             base_model = timm.create_model("volo_d4_224")
-            self.output_dim = 768
+            self.output_dim = 768 * 197
         if base_name == "volo_d5":
             base_model = timm.create_model("volo_d5_224")
-            self.output_dim = 768
+            self.output_dim = 768 * 197
 
         # base_model.reset_classifier(num_classes=0)
         self.backbone = base_model
