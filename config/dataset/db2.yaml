@@ -10,3 +10,4 @@ sex: null
 similarity_threshold:
   - factor: 0.05
   - min_days: 5
+normalize_y: True

@@ -4,7 +4,6 @@ import logging
 
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -15,10 +14,8 @@ from mandrillage.dataset import (
     MandrillImageDataset,
     read_dataset,
     MandrillSimilarityImageDataset,
-    resample,
     AugmentedDataset,
     AugmentedSimilarityDataset,
-    Sampler,
 )
 from mandrillage.evaluations import standard_regression_evaluation
 from mandrillage.models import SequentialModel
@@ -68,9 +65,7 @@ class BasicRegressionPipeline(Pipeline):
 
         # Make the split based on individual ids (cannot separate photos from the same id)
         if self.kfold == 0:
-            self.train_indices, self.val_indices = split_indices(
-                self.data, self.train_ratio
-            )
+            self.train_indices, self.val_indices = split_indices(self.data, self.train_ratio)
         else:
             self.train_indices, self.val_indices = create_kfold_data(
                 self.data, k=self.kfold, fold_index=self.train_index
@@ -84,6 +79,7 @@ class BasicRegressionPipeline(Pipeline):
             max_days=self.max_days,
             individuals_ids=self.train_indices,
             training=True,
+            normalize_y=self.config.dataset.normalize_y,
         )
 
         if self.config.training.use_augmentation:
@@ -109,6 +105,7 @@ class BasicRegressionPipeline(Pipeline):
             in_mem=self.in_mem,
             max_days=self.max_days,
             individuals_ids=self.val_indices,
+            normalize_y=self.config.dataset.normalize_y,
         )
 
         # s = Sampler(
@@ -169,15 +166,11 @@ class BasicRegressionPipeline(Pipeline):
             self.sim_model = self.sim_model.to(self.device)
 
     def init_losses(self):
-        train_error_function = hydra.utils.instantiate(
-            self.config.train_regression_loss
-        )
+        train_error_function = hydra.utils.instantiate(self.config.train_regression_loss)
         val_error_function = hydra.utils.instantiate(self.config.val_regression_loss)
 
         if self.sim_model:
-            self.sim_criterion = hydra.utils.instantiate(
-                self.config.train_similarity_loss
-            )
+            self.sim_criterion = hydra.utils.instantiate(self.config.train_similarity_loss)
 
         self.criterion = train_error_function
         self.val_criterions = {
@@ -206,17 +199,16 @@ class BasicRegressionPipeline(Pipeline):
 
     def mean_std(self, loader, model, device):
         predictions = {}
+        days_scale = self.max_days if self.config.normalize_y else 1
         for x_batch, y_batch in tqdm(loader, leave=True):
             x_batch = x_batch.to(device)
             y_pred_batch = model(x_batch)
             for i in range(x_batch.shape[0]):
                 y, y_pred = y_batch[i], y_pred_batch[i]
-                y = int(y.detach().cpu().numpy() * self.max_days)
+                y = int(y.detach().cpu().numpy() * days_scale)
                 if y not in predictions:
                     predictions[y] = []
-                predictions[y].append(
-                    int(y_pred.detach().cpu().numpy() * self.max_days)
-                )
+                predictions[y].append(int(y_pred.detach().cpu().numpy() * days_scale))
 
         std_by_value = {}
         mean_by_value = {}
@@ -263,7 +255,7 @@ class BasicRegressionPipeline(Pipeline):
                     self.device,
                 )
 
-                ### SIMILARITY LOSS
+                # SIMILARITY LOSS
                 if self.config.training.sim_weight > 0 and self.sim_model:
                     x1, x2, y = next(
                         iter(
@@ -291,7 +283,9 @@ class BasicRegressionPipeline(Pipeline):
                 train_loss += reg_loss.item() * reg_size
 
                 n_samples = self.batch_size * (i + 1)
-                train_description_str = f"Regression train loss: {(train_loss/n_samples):.5f} - Similarity train loss: {(train_sim_loss/n_samples):.5f}"
+                train_description_str = f"Regression train loss: \
+                    {(train_loss/n_samples):.5f} -\
+                    Similarity train loss: {(train_sim_loss/n_samples):.5f}"
                 pbar.set_description(train_description_str)
             log.info(train_description_str)
             train_loss /= len(self.train_dataset)
@@ -367,10 +361,10 @@ class BasicRegressionPipeline(Pipeline):
         # For each individual
         ids = val_dataset.df.groupby(["id"])
 
-        prediction_outputdir = os.path.join(
-            self.output_dir, f"prediction_{self.train_index}"
-        )
+        prediction_outputdir = os.path.join(self.output_dir, f"prediction_{self.train_index}")
         os.makedirs(prediction_outputdir, exist_ok=True)
+
+        days_scale = self.max_days if self.config.normalize_y else 1
 
         for _id, group in tqdm(ids):
             individual_outputdir = os.path.join(prediction_outputdir, str(_id))
@@ -383,8 +377,8 @@ class BasicRegressionPipeline(Pipeline):
                 y = y.detach().cpu().numpy()
                 x = x.detach().cpu()
 
-                y = int(y * self.max_days)
-                y_hat = int(y_hat * self.max_days)
+                y = int(y * days_scale)
+                y_hat = int(y_hat * days_scale)
 
                 individual_y_true.append(y)
                 individual_y_pred.append(y_hat)
@@ -402,7 +396,7 @@ class BasicRegressionPipeline(Pipeline):
                 mean = np.mean(np_pred[np_true == y_true])
                 y_individual_pred_means.append(mean)
 
-            fig = plt.figure(figsize=(12, 10))
+            plt.figure(figsize=(12, 10))
 
             plt.xlim([0, self.max_days])
             plt.ylim([0, self.max_days])
@@ -429,6 +423,7 @@ class BasicRegressionPipeline(Pipeline):
         y_true, y_pred = self.collect(
             self.val_loader, self.model, self.device, max_display=max_display
         )
+
         results = standard_regression_evaluation(
             np.array(y_true), np.array(y_pred), self.name, 0, self.max_days
         )
@@ -442,9 +437,7 @@ class BasicRegressionPipeline(Pipeline):
         log.info("Performing inference per individual")
         self.predict_per_individual(self.val_dataset)
 
-        return results[self.name][self.name + "_regression"][
-            self.name + "_regression_mae"
-        ]
+        return results[self.name][self.name + "_regression"][self.name + "_regression_mae"]
 
     def init_parameters(self):
         super().init_parameters()

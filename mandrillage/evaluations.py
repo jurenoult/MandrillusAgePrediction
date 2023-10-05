@@ -30,9 +30,7 @@ def standard_classification_evaluation(
 ):
     y_pred = [prob_to_label(prob) for prob in y_prob_pred]
     classification_name = f"{name}_classification"
-    classification_results = evaluate_classification(
-        y_true, y_pred, class_step, n_classes
-    )
+    classification_results = evaluate_classification(y_true, y_pred, class_step, n_classes)
     regression_name = f"{name}_as_regression"
     regression_results = evaluate_classification_as_regression(
         y_true,
@@ -67,9 +65,7 @@ def format_results(
     }
 
 
-def evaluate_regression(
-    y_true, y_pred, steps, min_range, max_range, name, display=False
-):
+def evaluate_regression(y_true, y_pred, steps, min_range, max_range, name, display=False):
     global_mae = mae(y_true, y_pred)
 
     step_results = {}
@@ -80,9 +76,9 @@ def evaluate_regression(
             cmin_range = step * i
             cmax_range = step * (i + 1)
             mean_range = (cmin_range + cmax_range) / 2
-            result = evaluate_by_subrange(y_true, y_pred, cmin_range, cmax_range)
+            mae, std = evaluate_by_subrange(y_true, y_pred, cmin_range, cmax_range)
 
-            substep_results.append((mean_range, result))
+            substep_results.append({"step": mean_range, "mae": mae, "std": std})
         step_results[step] = substep_results
 
     if display:
@@ -111,14 +107,13 @@ def evaluate_by_subrange(y_true, y_pred, min_range, max_range):
 
 
 def mae(y_true, y_pred):
-    return np.mean(abs(y_true - y_pred))
+    diff = abs(y_true - y_pred)
+    return np.mean(diff), np.std(diff)
 
 
 def plot_confusion_matrix(y_true, y_pred, labels):
     cm = confusion_matrix(y_true, y_pred)
-    cm_norm = (
-        cm.astype("float") / cm.sum(axis=1)[:, np.newaxis]
-    )  # Normalize the confusion matrix
+    cm_norm = cm.astype("float") / cm.sum(axis=1)[:, np.newaxis]  # Normalize the confusion matrix
 
     plt.figure(figsize=(16, 10))
     sns.heatmap(
@@ -170,9 +165,7 @@ def evaluate_classification_as_regression(
 ):
     labels = range_to_labels(class_step, n_classes)
     y_true_scalars = classification_to_regression(y_true_classes, labels)
-    y_pred_scalars = classification_to_regression(
-        prob_to_label(y_pred_prob_classes), labels
-    )
+    y_pred_scalars = classification_to_regression(prob_to_label(y_pred_prob_classes), labels)
     # y_pred_weigthed_scalars = classification_prob_to_regression(
     #     y_pred_prob_classes, labels
     # )
@@ -207,9 +200,7 @@ def evaluate_regression_as_classification(
             y_pred_scalars, class_step, min_range, max_range
         )
 
-        results = evaluate_classification(
-            y_true_classes, y_pred_classes, class_step, n_classes
-        )
+        results = evaluate_classification(y_true_classes, y_pred_classes, class_step, n_classes)
 
         all_results[current_name] = results
     return all_results
@@ -230,9 +221,7 @@ def scalar_to_class(scalar, class_step):
 
 def classification_prob_to_regression(y_classes_prob, labels):
     ranges = labels_to_range(labels)
-    y_scalars = [
-        prob_class_to_scalar(y_class_prob, ranges) for y_class_prob in y_classes_prob
-    ]
+    y_scalars = [prob_class_to_scalar(y_class_prob, ranges) for y_class_prob in y_classes_prob]
     return np.array(y_scalars)
 
 
@@ -257,9 +246,7 @@ def class_to_scalar(class_index, ranges):
 
 
 def range_to_labels(class_step, n_classes):
-    labels = [
-        f"Age [{int(class_step*i)};{int(class_step*(i+1))}]" for i in range(n_classes)
-    ]
+    labels = [f"Age [{int(class_step*i)};{int(class_step*(i+1))}]" for i in range(n_classes)]
     return labels
 
 

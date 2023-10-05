@@ -9,3 +9,4 @@ logs
 train_margin.png
 val_margin.png
 mlruns
+.vscode

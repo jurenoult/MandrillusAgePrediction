@@ -88,9 +88,7 @@ def read_dataset(
     data["age"] = data.apply(compute_age, axis=1)
 
     if sex:
-        assert (
-            sex == "f" or sex == "m"
-        ), "Expected sex to be either 'f' (female) or 'm' (male)"
+        assert sex == "f" or sex == "m", "Expected sex to be either 'f' (female) or 'm' (male)"
         data = filter_by_sex(data, sex)
     if filter_certainty:
         data = filter_by_certainty(data, max_dob_error)
@@ -114,9 +112,7 @@ def resample(df, bins):
     max_count = range_counts.max()
 
     # Filter the DataFrame to have the same number of occurrences for each value range
-    filtered_df = df.groupby(value_range).apply(
-        lambda x: x.sample(max_count, replace=True)
-    )
+    filtered_df = df.groupby(value_range).apply(lambda x: x.sample(max_count, replace=True))
 
     # Reset the index of the filtered DataFrame
     filtered_df = filtered_df.reset_index(drop=True)
@@ -246,6 +242,7 @@ class MandrillImageDataset(Dataset):
         individuals_ids=[],
         max_nbins=12,
         training=False,
+        normalize_y=True,
     ):
         self.df = dataframe
         self.root_dir = root_dir
@@ -254,6 +251,7 @@ class MandrillImageDataset(Dataset):
         self.max_days = max_days
         self.max_nbins = max_nbins
         self.training = training
+        self.normalize_y = normalize_y
 
         if len(individuals_ids) != 0:
             #     print("No individuals data specified, using all dataset")
@@ -342,7 +340,8 @@ class MandrillImageDataset(Dataset):
         if not isinstance(target, int):
             target = float(row["age"].values[0])
         if self.max_days > 0:
-            target = target / self.max_days
+            if self.normalize_y:
+                target = target / self.max_days
 
         if self.in_mem and idx >= 0:
             image = self.images[idx]
@@ -411,9 +410,7 @@ class MandrillSimilarityImageDataset(MandrillImageDataset):
 
     def get_photo_pair(self, idx, age, is_same_mandrill, is_same_age):
         # Get a random photo with idx and age
-        candidates = self.extract_from_df(
-            (self.df["id"] == idx) & (self.df["age"] == age)
-        )
+        candidates = self.extract_from_df((self.df["id"] == idx) & (self.df["age"] == age))
         # Get a photo from the list and remove it from the list of candidates
         x1 = self.take_random(candidates)
 
@@ -425,9 +422,7 @@ class MandrillSimilarityImageDataset(MandrillImageDataset):
                     x2 = self.take_random(candidates)
 
             if not is_same_age:
-                candidates = self.extract_from_df(
-                    (self.df["id"] == idx) & (self.df["age"] != age)
-                )
+                candidates = self.extract_from_df((self.df["id"] == idx) & (self.df["age"] != age))
                 # If there is only one age for this mandrill
                 # We must choose another mandrill
                 if len(candidates) == 0:
@@ -437,9 +432,7 @@ class MandrillSimilarityImageDataset(MandrillImageDataset):
 
         if not is_same_mandrill:
             if is_same_age:
-                candidates = self.extract_from_df(
-                    (self.df["id"] != idx) & (self.df["age"] == age)
-                )
+                candidates = self.extract_from_df((self.df["id"] != idx) & (self.df["age"] == age))
                 # If there are no other mandrill with same age
                 if len(candidates) == 0:
                     is_same_age = False
@@ -447,9 +440,7 @@ class MandrillSimilarityImageDataset(MandrillImageDataset):
                     x2 = self.take_random(candidates)
 
             if not is_same_age:  # Diff mandrills diff age
-                candidates = self.extract_from_df(
-                    (self.df["id"] != idx) & (self.df["age"] != age)
-                )
+                candidates = self.extract_from_df((self.df["id"] != idx) & (self.df["age"] != age))
                 x2 = self.take_random(candidates)
 
         return x1, x2
@@ -467,9 +458,7 @@ class MandrillSimilarityImageDataset(MandrillImageDataset):
         y2_threshold = self.similarity_threshold.factor * y2
         # Take the max
         max_threshold = max(y1_threshold, y2_threshold)
-        threshold = min(
-            max_threshold, self.similarity_threshold.min_days / self.max_days
-        )
+        threshold = min(max_threshold, self.similarity_threshold.min_days / self.max_days)
 
         return age_distance < threshold
 

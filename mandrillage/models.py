@@ -122,7 +122,11 @@ class RegressionHead(nn.Module):
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.linear = nn.Linear(last_feature_size, output_dim, bias=False)
-        self.activation = nn.Sigmoid()
+
+        if sigmoid:
+            self.activation = nn.Sigmoid()
+        else:
+            self.activation = nn.ReLU()
         self.sigmoid = sigmoid
 
     def block(self, in_features, out_features):
@@ -144,8 +148,8 @@ class RegressionHead(nn.Module):
         if self.output_dim == 1:
             x = torch.reshape(x, (x.shape[0],))
 
-        if self.sigmoid:
-            x = self.activation(x)
+        # if self.sigmoid:
+        x = self.activation(x)
         return x
 
 
@@ -160,9 +164,7 @@ class DinoV2(nn.Module):
             self.backbone = torch.hub.load("facebookresearch/dinov2", "dinov2_vitb14")
         if dino_type == "large":
             self.output_dim = 1000
-            self.backbone = torch.hub.load(
-                "facebookresearch/dinov2", "dinov2_vitl14_lc"
-            )
+            self.backbone = torch.hub.load("facebookresearch/dinov2", "dinov2_vitl14_lc")
 
     def features(self, x):
         return self.backbone(x)
@@ -511,39 +513,17 @@ class VGGFace(nn.Module):
         self.block_size = [2, 2, 3, 3, 3]
         self.conv_1_1 = nn.Conv2d(3, start_filters, 3, stride=1, padding=1)
         self.conv_1_2 = nn.Conv2d(start_filters, start_filters, 3, stride=1, padding=1)
-        self.conv_2_1 = nn.Conv2d(
-            start_filters, start_filters * 2, 3, stride=1, padding=1
-        )
-        self.conv_2_2 = nn.Conv2d(
-            start_filters * 2, start_filters * 2, 3, stride=1, padding=1
-        )
-        self.conv_3_1 = nn.Conv2d(
-            start_filters * 2, start_filters * 4, 3, stride=1, padding=1
-        )
-        self.conv_3_2 = nn.Conv2d(
-            start_filters * 4, start_filters * 4, 3, stride=1, padding=1
-        )
-        self.conv_3_3 = nn.Conv2d(
-            start_filters * 4, start_filters * 4, 3, stride=1, padding=1
-        )
-        self.conv_4_1 = nn.Conv2d(
-            start_filters * 4, start_filters * 8, 3, stride=1, padding=1
-        )
-        self.conv_4_2 = nn.Conv2d(
-            start_filters * 8, start_filters * 8, 3, stride=1, padding=1
-        )
-        self.conv_4_3 = nn.Conv2d(
-            start_filters * 8, start_filters * 8, 3, stride=1, padding=1
-        )
-        self.conv_5_1 = nn.Conv2d(
-            start_filters * 8, start_filters * 8, 3, stride=1, padding=1
-        )
-        self.conv_5_2 = nn.Conv2d(
-            start_filters * 8, start_filters * 8, 3, stride=1, padding=1
-        )
-        self.conv_5_3 = nn.Conv2d(
-            start_filters * 8, start_filters * 8, 3, stride=1, padding=1
-        )
+        self.conv_2_1 = nn.Conv2d(start_filters, start_filters * 2, 3, stride=1, padding=1)
+        self.conv_2_2 = nn.Conv2d(start_filters * 2, start_filters * 2, 3, stride=1, padding=1)
+        self.conv_3_1 = nn.Conv2d(start_filters * 2, start_filters * 4, 3, stride=1, padding=1)
+        self.conv_3_2 = nn.Conv2d(start_filters * 4, start_filters * 4, 3, stride=1, padding=1)
+        self.conv_3_3 = nn.Conv2d(start_filters * 4, start_filters * 4, 3, stride=1, padding=1)
+        self.conv_4_1 = nn.Conv2d(start_filters * 4, start_filters * 8, 3, stride=1, padding=1)
+        self.conv_4_2 = nn.Conv2d(start_filters * 8, start_filters * 8, 3, stride=1, padding=1)
+        self.conv_4_3 = nn.Conv2d(start_filters * 8, start_filters * 8, 3, stride=1, padding=1)
+        self.conv_5_1 = nn.Conv2d(start_filters * 8, start_filters * 8, 3, stride=1, padding=1)
+        self.conv_5_2 = nn.Conv2d(start_filters * 8, start_filters * 8, 3, stride=1, padding=1)
+        self.conv_5_3 = nn.Conv2d(start_filters * 8, start_filters * 8, 3, stride=1, padding=1)
         self.fc6 = nn.Linear(start_filters * 8 * 7 * 7, start_filters * 64)
         self.fc7 = nn.Linear(start_filters * 64, start_filters * 64)
         self.fc8 = nn.Linear(start_filters * 64, output_dim)
@@ -577,18 +557,18 @@ class VGGFace(nn.Module):
                     self_layer.weight.data[...] = torch.tensor(layer.weight).view_as(
                         self_layer.weight
                     )[...]
-                    self_layer.bias.data[...] = torch.tensor(layer.bias).view_as(
-                        self_layer.bias
-                    )[...]
+                    self_layer.bias.data[...] = torch.tensor(layer.bias).view_as(self_layer.bias)[
+                        ...
+                    ]
                 else:
                     self_layer = getattr(self, "fc%d" % (block))
                     block += 1
                     self_layer.weight.data[...] = torch.tensor(layer.weight).view_as(
                         self_layer.weight
                     )[...]
-                    self_layer.bias.data[...] = torch.tensor(layer.bias).view_as(
-                        self_layer.bias
-                    )[...]
+                    self_layer.bias.data[...] = torch.tensor(layer.bias).view_as(self_layer.bias)[
+                        ...
+                    ]
         print(f"Loaded model from pretrained model at path : {path}")
 
     def create_bn(self):
@@ -652,9 +632,7 @@ class CoAtNetBackbone(nn.Module):
 
         num_blocks = [2, 2, 3, 5, 2]  # L
         channels = [64, 96, 192, 384, 768]  # D
-        self.model = CoAtNet(
-            (224, 224), 3, num_blocks, channels, num_classes=output_dim
-        )
+        self.model = CoAtNet((224, 224), 3, num_blocks, channels, num_classes=output_dim)
         self.output_dim = output_dim
 
     def features(self, x):
