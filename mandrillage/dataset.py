@@ -342,6 +342,8 @@ class MandrillImageDataset(Dataset):
         if self.max_days > 0:
             if self.normalize_y:
                 target = target / self.max_days
+            else:
+                target = float(target) / 365.0
 
         if self.in_mem and idx >= 0:
             image = self.images[idx]

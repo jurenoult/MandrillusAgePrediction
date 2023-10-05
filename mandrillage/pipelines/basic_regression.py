@@ -205,10 +205,10 @@ class BasicRegressionPipeline(Pipeline):
             y_pred_batch = model(x_batch)
             for i in range(x_batch.shape[0]):
                 y, y_pred = y_batch[i], y_pred_batch[i]
-                y = int(y.detach().cpu().numpy() * days_scale)
+                y = y.detach().cpu().numpy() * days_scale
                 if y not in predictions:
                     predictions[y] = []
-                predictions[y].append(int(y_pred.detach().cpu().numpy() * days_scale))
+                predictions[y].append(y_pred.detach().cpu().numpy() * days_scale)
 
         std_by_value = {}
         mean_by_value = {}
@@ -377,8 +377,8 @@ class BasicRegressionPipeline(Pipeline):
                 y = y.detach().cpu().numpy()
                 x = x.detach().cpu()
 
-                y = int(y * days_scale)
-                y_hat = int(y_hat * days_scale)
+                y = y * days_scale
+                y_hat = y_hat * days_scale
 
                 individual_y_true.append(y)
                 individual_y_pred.append(y_hat)

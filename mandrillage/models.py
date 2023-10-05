@@ -121,12 +121,12 @@ class RegressionHead(nn.Module):
             self.blocks = nn.Sequential(lin_layers)
         self.input_dim = input_dim
         self.output_dim = output_dim
-        self.linear = nn.Linear(last_feature_size, output_dim, bias=False)
+        self.linear = nn.Linear(last_feature_size, output_dim)
 
         if sigmoid:
             self.activation = nn.Sigmoid()
         else:
-            self.activation = nn.ReLU()
+            self.activation = None  # nn.ReLU()
         self.sigmoid = sigmoid
 
     def block(self, in_features, out_features):
@@ -149,7 +149,8 @@ class RegressionHead(nn.Module):
             x = torch.reshape(x, (x.shape[0],))
 
         # if self.sigmoid:
-        x = self.activation(x)
+        # if self.activation:
+        #     x = self.activation(x)
         return x
 
 

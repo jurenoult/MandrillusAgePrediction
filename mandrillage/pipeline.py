@@ -41,9 +41,7 @@ class Pipeline(object):
         mlflow.log_param("use_augmentation", self.config.training.use_augmentation)
         mlflow.log_param("backbone_target", self.config.backbone._target_)
         mlflow.log_param("regression_head_stages", self.config.regression_head.n_lin)
-        mlflow.log_param(
-            "regression_head_start_neurons", self.config.regression_head.lin_start
-        )
+        mlflow.log_param("regression_head_start_neurons", self.config.regression_head.lin_start)
         mlflow.log_param("train_loss_type", self.config.train_regression_loss._target_)
         mlflow.log_param("val_loss_type", self.config.val_regression_loss._target_)
 
@@ -196,9 +194,7 @@ class Pipeline(object):
         self.init_datamodule()
 
     def run(self):
-        assert (
-            self.config.train or self.config.test
-        ), "At least train or test must be true"
+        assert self.config.train or self.config.test, "At least train or test must be true"
 
         training_score = None
         test_score = None
@@ -216,9 +212,7 @@ class Pipeline(object):
                 test_scores[i] = test_score
 
             # Save cross val results
-            cross_val_scores_path = os.path.join(
-                self.output_dir, "cross_val_scores.json"
-            )
+            cross_val_scores_path = os.path.join(self.output_dir, "cross_val_scores.json")
             with open(cross_val_scores_path, "w") as f:
                 import json
 

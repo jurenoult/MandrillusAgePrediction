@@ -66,7 +66,7 @@ def format_results(
 
 
 def evaluate_regression(y_true, y_pred, steps, min_range, max_range, name, display=False):
-    global_mae = mae(y_true, y_pred)
+    global_mae, global_std = mae(y_true, y_pred)
 
     step_results = {}
     for step in steps:
@@ -76,9 +76,9 @@ def evaluate_regression(y_true, y_pred, steps, min_range, max_range, name, displ
             cmin_range = step * i
             cmax_range = step * (i + 1)
             mean_range = (cmin_range + cmax_range) / 2
-            mae, std = evaluate_by_subrange(y_true, y_pred, cmin_range, cmax_range)
+            mae_value, std = evaluate_by_subrange(y_true, y_pred, cmin_range, cmax_range)
 
-            substep_results.append({"step": mean_range, "mae": mae, "std": std})
+            substep_results.append({"step": mean_range, "mae": mae_value, "std": std})
         step_results[step] = substep_results
 
     if display:
@@ -102,7 +102,7 @@ def evaluate_by_subrange(y_true, y_pred, min_range, max_range):
     y_true_subrange = y_true[selection]
     y_pred_subrange = y_pred[selection]
     if y_true_subrange.shape[0] == 0 or y_pred_subrange.shape[0] == 0:
-        return 0.0
+        return 0.0, 0.0
     return mae(y_true_subrange, y_pred_subrange)
 
 
