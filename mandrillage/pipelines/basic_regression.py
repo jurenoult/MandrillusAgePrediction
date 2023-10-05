@@ -199,7 +199,7 @@ class BasicRegressionPipeline(Pipeline):
 
     def mean_std(self, loader, model, device):
         predictions = {}
-        days_scale = self.max_days if self.config.normalize_y else 1
+        days_scale = self.max_days if self.config.dataset.normalize_y else 1
         for x_batch, y_batch in tqdm(loader, leave=True):
             x_batch = x_batch.to(device)
             y_pred_batch = model(x_batch)
