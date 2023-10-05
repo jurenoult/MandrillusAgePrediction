@@ -126,7 +126,7 @@ class RegressionHead(nn.Module):
         if sigmoid:
             self.activation = nn.Sigmoid()
         else:
-            self.activation = None  # nn.ReLU()
+            self.activation = nn.ReLU()
         self.sigmoid = sigmoid
 
     def block(self, in_features, out_features):
@@ -149,8 +149,8 @@ class RegressionHead(nn.Module):
             x = torch.reshape(x, (x.shape[0],))
 
         # if self.sigmoid:
-        # if self.activation:
-        #     x = self.activation(x)
+        if self.activation:
+            x = self.activation(x)
         return x
 
 
