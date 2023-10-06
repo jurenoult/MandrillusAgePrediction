@@ -245,12 +245,13 @@ class BasicRegressionPipeline(Pipeline):
 
         # This mean that we set the max age at time 0 to the global max age
         # It is the default behavior
-        # epoch_step = self.epochs
-        # age_step = self.max_age
+        epoch_step = self.epochs
+        age_step = self.max_age
 
         # We increase the max age of both train/val dataset incrementally
-        epoch_step = 4
-        age_step = 0.2
+        # epoch_step = 4
+        # age_step = 0.2
+
         ages_steps = {
             i * epoch_step: min(self.max_age, (i + 1) * age_step)
             for i in range(int(self.max_age // age_step) + 1)
