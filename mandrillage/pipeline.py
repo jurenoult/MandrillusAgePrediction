@@ -134,7 +134,6 @@ class Pipeline(object):
 
         # Forward pass
         y_hat = model(x)
-        print(y, y_hat)
         loss = criterion(y_hat, y)
 
         size = self.get_size(x)
