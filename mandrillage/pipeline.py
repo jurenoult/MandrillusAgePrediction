@@ -95,7 +95,7 @@ class Pipeline(object):
     def train(self):
         raise ValueError("You must subclass self.train() method")
 
-    def val_loss(self, loader, model, criterion, device, repeat=1):
+    def val_loss(self, loader, model, criterion, device, repeat=1, display_worst_error=False):
         total_val_loss = 0.0
 
         for i in range(repeat):
@@ -134,6 +134,7 @@ class Pipeline(object):
 
         # Forward pass
         y_hat = model(x)
+        print(y, y_hat)
         loss = criterion(y_hat, y)
 
         size = self.get_size(x)

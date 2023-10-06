@@ -118,6 +118,13 @@ class BasicRegressionPipeline(Pipeline):
         )
         self.val_loader = self.make_dataloader(self.val_dataset)
 
+    def update_from_ages_steps(self, ages_steps, epoch):
+        if epoch in ages_steps:
+            max_age = ages_steps[epoch]
+            log.info(f"Setting training max age to {max_age}")
+            self.train_dataset.filter_by_age(max_age)
+            self.train_loader = self.make_dataloader(self.train_dataset, shuffle=True)
+
     def init_logging(self):
         pass
 
@@ -226,8 +233,6 @@ class BasicRegressionPipeline(Pipeline):
         return np.mean(list(std_by_value.values())), fig
 
     def train(self):
-        steps = len(self.train_loader)
-
         if self.resume:
             self.model = load(
                 self.model,
@@ -236,17 +241,34 @@ class BasicRegressionPipeline(Pipeline):
                 output_dir=self.output_dir,
             )
 
+        # Age steps with number of epochs
+
+        # This mean that we set the max age at time 0 to the global max age
+        # It is the default behavior
+        # epoch_step = self.epochs
+        # age_step = self.max_age
+
+        # We increase the max age of both train/val dataset incrementally
+        epoch_step = 4
+        age_step = 0.2
+        ages_steps = {
+            i * epoch_step: min(self.max_age, (i + 1) * age_step)
+            for i in range(int(self.max_age // age_step) + 1)
+        }
+
         # Training loop
         best_val = np.inf
         pbar = tqdm(range(self.epochs))
         for epoch in pbar:
+            self.update_from_ages_steps(ages_steps, epoch)
+
             self.model.train()  # Set the model to train mode
             if self.sim_model:
                 self.sim_model.train()
             train_loss = 0.0
             train_sim_loss = 0.0
 
-            for i in tqdm(range(steps), leave=True):
+            for i in tqdm(range(len(self.train_loader)), leave=True):
                 reg_loss, reg_size = self.train_step(
                     self.train_loader,
                     self.optimizer,

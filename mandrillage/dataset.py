@@ -195,6 +195,9 @@ class AugmentedDataset(Dataset):
     def classes(self):
         return self.subset.classes()
 
+    def filter_by_age(self, max_age):
+        self.subset.filter_by_age(max_age)
+
 
 class AugmentedSimilarityDataset(AugmentedDataset):
     def __init__(self, subset):
@@ -278,8 +281,11 @@ class MandrillImageDataset(Dataset):
 
                 self.data_classes[age_id].append(i)
 
-        # if self.training:
-        #     self.partition_by_age()
+        self.full_df = self.df.copy()
+
+    def filter_by_age(self, max_age):
+        max_age_days = int(max_age * 365)
+        self.df = self.full_df[self.full_df["age"] <= max_age_days]
 
     def partition_by_age(self):
         # Split the max days into n_bins

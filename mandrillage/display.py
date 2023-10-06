@@ -46,9 +46,7 @@ def compute_projection(model, dataloader, device):
     projections = []
     projections_target_age = []
     with torch.no_grad():
-        for inputs, targets_age in tqdm(
-            dataloader, desc="Computing dataset projection"
-        ):
+        for inputs, targets_age in tqdm(dataloader, desc="Computing dataset projection"):
             inputs = inputs.to(device)
             projected = model(inputs).cpu()
             projections.append(projected)
@@ -73,9 +71,7 @@ def display_latent_space(projections, targets, color_map="jet"):
     fig, axes = plt.subplots(1, 2, figsize=(10, 4))
 
     # Plot the data points with color corresponding to age
-    sc = axes[0].scatter(
-        projected_data[:, 0], projected_data[:, 1], c=targets, cmap=color_map
-    )
+    sc = axes[0].scatter(projected_data[:, 0], projected_data[:, 1], c=targets, cmap=color_map)
     cbar = plt.colorbar(sc)
     cbar.set_label("Age")
 
@@ -84,9 +80,7 @@ def display_latent_space(projections, targets, color_map="jet"):
     axes[0].set_ylabel("Principal Component 2")
     axes[0].set_title("PCA with Age")
 
-    sc = axes[1].scatter(
-        tsne_embedding[:, 0], tsne_embedding[:, 1], c=targets, cmap=color_map
-    )
+    sc = axes[1].scatter(tsne_embedding[:, 0], tsne_embedding[:, 1], c=targets, cmap=color_map)
     axes[1].set_title("t-SNE Visualization")
     axes[1].set_xlabel("Dimension 1")
     axes[1].set_ylabel("Dimension 2")
