@@ -249,13 +249,14 @@ class BasicRegressionPipeline(Pipeline):
         age_step = self.max_age
 
         # We increase the max age of both train/val dataset incrementally
-        epoch_step = 10
-        age_step = 0.2
+        # epoch_step = 10
+        # age_step = 0.2
 
         ages_steps = {
             i * epoch_step: min(self.max_age, (i + 1) * age_step)
             for i in range(int(self.max_age // age_step) + 1)
         }
+        print(ages_steps)
 
         # Training loop
         best_val = np.inf

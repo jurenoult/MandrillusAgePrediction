@@ -473,7 +473,8 @@ class MandrillSimilarityImageDataset(MandrillImageDataset):
     def __getitem__(self, idx):
         _id = list(self.valid_id_date.keys())[idx]
 
-        is_same_mandrill = np.random.choice([True, False])
+        # is_same_mandrill = np.random.choice([True, False])
+        is_same_mandrill = True  # Force same mandrill
         is_same_age = np.random.choice([True, False])
 
         ages = self.valid_id_date[_id]
