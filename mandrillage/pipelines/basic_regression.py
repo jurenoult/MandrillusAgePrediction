@@ -207,10 +207,12 @@ class BasicRegressionPipeline(Pipeline):
     def mean_std(self, loader, model, device):
         predictions = {}
         days_scale = self.max_days if self.config.dataset.normalize_y else 1
+        xs = []
         for x_batch, y_batch in tqdm(loader, leave=True):
             x_batch = x_batch.to(device)
             y_pred_batch = model(x_batch)
             for i in range(x_batch.shape[0]):
+                xs.append(x_batch[i])
                 y, y_pred = y_batch[i], y_pred_batch[i]
                 y = y.detach().cpu().numpy() * days_scale
                 if y not in predictions:
@@ -388,7 +390,7 @@ class BasicRegressionPipeline(Pipeline):
         prediction_outputdir = os.path.join(self.output_dir, f"prediction_{self.train_index}")
         os.makedirs(prediction_outputdir, exist_ok=True)
 
-        days_scale = self.max_days if self.config.normalize_y else 1
+        days_scale = self.max_days if self.config.dataset.normalize_y else 1
 
         for _id, group in tqdm(ids):
             individual_outputdir = os.path.join(prediction_outputdir, str(_id))
@@ -458,8 +460,8 @@ class BasicRegressionPipeline(Pipeline):
 
             file.write(json.dumps(results, cls=NumpyEncoder))
 
-        log.info("Performing inference per individual")
-        self.predict_per_individual(self.val_dataset)
+        # log.info("Performing inference per individual")
+        # self.predict_per_individual(self.val_dataset)
 
         return results[self.name][self.name + "_regression"][self.name + "_regression_mae"]
 

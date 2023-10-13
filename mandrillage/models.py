@@ -9,6 +9,16 @@ from torch.nn.init import trunc_normal_
 import timm
 
 
+class boundReLU(nn.Module):
+    def __init__(self, min_value, max_value):
+        super(boundReLU, self).__init__()
+        self.min_value = min_value
+        self.max_value = max_value
+
+    def forward(self, x):
+        return torch.min(torch.max(self.min_value, x), self.max_value)
+
+
 class SequentialModel(nn.Module):
     def __init__(self, backbone, head):
         super(SequentialModel, self).__init__()
