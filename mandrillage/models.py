@@ -350,21 +350,3 @@ class VGGFace(nn.Module):
     def forward(self, x):
         x = self.features(x)
         return x
-
-
-class CoAtNetBackbone(nn.Module):
-    def __init__(self, output_dim):
-        super().__init__()
-
-        from .coatnet import CoAtNet
-
-        num_blocks = [2, 2, 3, 5, 2]  # L
-        channels = [64, 96, 192, 384, 768]  # D
-        self.model = CoAtNet((224, 224), 3, num_blocks, channels, num_classes=output_dim)
-        self.output_dim = output_dim
-
-    def features(self, x):
-        return self.model(x)
-
-    def forward(self, x):
-        return self.model(x)
