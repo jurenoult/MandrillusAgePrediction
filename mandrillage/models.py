@@ -9,8 +9,8 @@ import timm
 class boundReLU(nn.Module):
     def __init__(self, min_value, max_value):
         super(boundReLU, self).__init__()
-        self.min_value = min_value
-        self.max_value = max_value
+        self.min_value = torch.tensor(min_value)
+        self.max_value = torch.tensor(max_value)
 
     def forward(self, x):
         return torch.min(torch.max(self.min_value, x), self.max_value)
@@ -134,8 +134,9 @@ class RegressionHead(nn.Module):
         if sigmoid:
             self.activation = nn.Sigmoid()
         else:
-            self.activation = None  # nn.ReLU()
-        self.sigmoid = sigmoid
+            # self.activation = boundReLU(min_value=0, max_value=2.0)
+            self.activation = None
+        # self.sigmoid = sigmoid
 
     def block(self, in_features, out_features):
         lin = nn.Linear(in_features, out_features)
