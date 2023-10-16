@@ -60,7 +60,8 @@ class VoloBackbone(nn.Module):
         self.backbone = base_model
 
     def load_weights(self, path):
-        load_pretrained_weights(self.backbone, path)
+        checkpoint = torch.load(path, map_location="cpu")
+        self.backbone.load_state_dict(checkpoint)
         self.backbone.return_dense = False
         self.backbone.reset_classifier(num_classes=0)
 
