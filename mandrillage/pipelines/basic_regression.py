@@ -61,8 +61,6 @@ class BasicRegressionPipeline(Pipeline):
             sex=self.sex,
         )
 
-        # self.data = resample(self.data, bins=int(self.max_age))
-
         # Make the split based on individual ids (cannot separate photos from the same id)
         if self.kfold == 0:
             self.train_indices, self.val_indices = split_indices(self.data, self.train_ratio)
@@ -107,10 +105,6 @@ class BasicRegressionPipeline(Pipeline):
             individuals_ids=self.val_indices,
             normalize_y=self.config.dataset.normalize_y,
         )
-
-        # s = Sampler(
-        #     self.train_dataset.classes(), class_per_batch=1, batch_size=self.batch_size
-        # )
 
         self.train_loader = self.make_dataloader(self.train_dataset, shuffle=True)
         self.train_similarity_loader = self.make_dataloader(
@@ -234,6 +228,36 @@ class BasicRegressionPipeline(Pipeline):
 
         return np.mean(list(std_by_value.values())), fig
 
+    def save_best_val_loss(self, val_loss, best_val):
+        if val_loss < best_val:
+            log.info(
+                f"Val loss {self.watch_val_loss} improved from {best_val:.4f} to {val_loss:.4f}"
+            )
+            best_val = val_loss
+            save(
+                self.model,
+                f"regression_{self.train_index}",
+                exp_name=self.name,
+                output_dir=self.output_dir,
+            )
+        else:
+            log.info(f"Val loss did not improved from {best_val:.4f}")
+        return best_val
+
+    def sim_train_step(
+        self,
+    ):
+        x1, x2, y = next(
+            iter(
+                self.train_similarity_loader,
+            )
+        )
+        y = y.to(self.device)
+        x1, x2 = self.xy_to_device(x1, x2, self.device)
+        y_pred = self.sim_model((x1, x2))
+        sim_loss = self.sim_criterion(y_pred, y)
+        return sim_loss, self.get_size(x1)
+
     def train(self):
         if self.resume:
             self.model = load(
@@ -273,6 +297,8 @@ class BasicRegressionPipeline(Pipeline):
             train_sim_loss = 0.0
 
             for i in tqdm(range(len(self.train_loader)), leave=True):
+                self.optimizer.zero_grad()
+
                 reg_loss, reg_size = self.train_step(
                     self.train_loader,
                     self.optimizer,
@@ -283,22 +309,12 @@ class BasicRegressionPipeline(Pipeline):
 
                 # SIMILARITY LOSS
                 if self.config.training.sim_weight > 0 and self.sim_model:
-                    x1, x2, y = next(
-                        iter(
-                            self.train_similarity_loader,
-                        )
-                    )
-                    y = y.to(self.device)
-                    x1, x2 = self.xy_to_device(x1, x2, self.device)
-                    y1 = self.sim_model((x1, x2))
-                    sim_loss = self.sim_criterion(y1, y)
-
-                    # Disable regression loss
+                    sim_loss, sim_size = self.sim_train_step()
                     loss = (
                         self.config.training.reg_weight * reg_loss
                         + self.config.training.sim_weight * sim_loss
                     )
-                    train_sim_loss += sim_loss.item() * self.get_size(x1)
+                    train_sim_loss += sim_loss.item() * sim_size
                 else:
                     loss = reg_loss
 
@@ -337,19 +353,7 @@ class BasicRegressionPipeline(Pipeline):
                 # mlflow.log_figure(fig, "mean_std")
 
             val_loss = val_losses[self.watch_val_loss]
-            if val_loss < best_val:
-                log.info(
-                    f"Val loss {self.watch_val_loss} improved from {best_val:.4f} to {val_loss:.4f}"
-                )
-                best_val = val_loss
-                save(
-                    self.model,
-                    f"regression_{self.train_index}",
-                    exp_name=self.name,
-                    output_dir=self.output_dir,
-                )
-            else:
-                log.info(f"Val loss did not improved from {best_val:.4f}")
+            best_val = self.save_best_val_loss(val_loss, best_val)
 
             mlflow.log_metric("val_loss", val_loss, step=epoch)
             mlflow.log_metric("val_loss_std", val_losses["mean_std"], step=epoch)
