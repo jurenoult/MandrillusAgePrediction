@@ -2,10 +2,7 @@ import torch.nn as nn
 from collections import OrderedDict
 from coral_pytorch.layers import CoralLayer
 import torch
-import volo
-from volo.utils import load_pretrained_weights
 import torchfile
-from torch.nn.init import trunc_normal_
 import timm
 
 
