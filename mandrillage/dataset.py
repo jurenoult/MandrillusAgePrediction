@@ -304,7 +304,12 @@ class MandrillImageDataset(Dataset):
         return value
 
     def photo_path(self, row):
-        path = self.root_dir
+        photo_path = self.photo_path_native(row)
+        path = os.path.join(self.root_dir, photo_path)        
+        return path
+
+    def photo_path_native(self, row):
+        path = ""
         if "parent_folder" in row:
             path = os.path.join(path, self.value_to_str(row["parent_folder"]))
         path = os.path.join(path, f"{self.value_to_str(row['id'])}")
@@ -345,7 +350,12 @@ class MandrillImageDataset(Dataset):
 
     def get_metadata_at_index(self, idx):
         row = self.df.iloc[[idx]]
-        return {"id": self.value_to_str(row["id"]), "age": self.value_to_str(row["age"])}
+        photo_path = self.photo_path_native(row).replace("/", "_")
+        return {
+            "id": self.value_to_str(row["id"]),
+            "age": self.value_to_str(row["age"]),
+            "photo_path": photo_path,
+        }
 
     def set_images(self, images):
         self.images = images

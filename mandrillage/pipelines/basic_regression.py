@@ -289,6 +289,7 @@ class BasicRegressionPipeline(Pipeline):
         y_true = []
         y_pred = []
         metadatas = []
+        photo_paths = []
         errors = []
         for i in tqdm(range(len(dataset)), leave=False):
             x, y = dataset[i]
@@ -300,9 +301,18 @@ class BasicRegressionPipeline(Pipeline):
             y_true.append(y)
             y_pred.append(prediction)
             metadatas.append(metadata["id"])
+            photo_paths.append(metadata["photo_path"])
             errors.append(abs(y - prediction))
 
-        df = pd.DataFrame({"y_pred": y_pred, "y_true": y_true, "id": metadatas, "error": errors})
+        df = pd.DataFrame(
+            {
+                "y_pred": y_pred,
+                "y_true": y_true,
+                "id": metadatas,
+                "photo_path": photo_paths,
+                "error": errors,
+            }
+        )
 
         return df
 
@@ -325,6 +335,7 @@ class BasicRegressionPipeline(Pipeline):
         for i in range(n):
             row = sorted_df.iloc[[i]]
             real_index = row.index.values[0]
+            photo_id = row["photo_path"].values[0]
 
             x, y = dataset[real_index]
             y_pred = np.round(row["y_pred"].values[0].numpy() * self.days_scale)
@@ -332,7 +343,7 @@ class BasicRegressionPipeline(Pipeline):
 
             plt.imshow(x.permute(1, 2, 0))
             plt.title(f"Predicted: {y_pred}, Real: {y}, Error: {abs(y - y_pred)}")
-            plt.savefig(os.path.join(epoch_worst_cases_dir, f"{i}_{real_index}.png"))
+            plt.savefig(os.path.join(epoch_worst_cases_dir, f"{i}_{photo_id}.png"))
             plt.close()
 
     def train(self):
