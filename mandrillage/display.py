@@ -31,9 +31,12 @@ def display_predictions(
     plt.fill_between(ys, means - std, means + std)
 
     for y, values in predictions.items():
-        size = len(values)
+        flatten_values = []
+        for sub_values in values.values():
+            flatten_values.extend(sub_values)
+        size = len(flatten_values)
         y = [y] * size
-        plt.scatter(y, values)
+        plt.scatter(y, flatten_values)
 
     plt.savefig(f"{output_path}.png")
     plt.close()

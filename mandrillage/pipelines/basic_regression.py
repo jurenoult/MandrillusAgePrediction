@@ -9,6 +9,8 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 import hydra
 import mlflow
+import pandas as pd
+import matplotlib.pyplot as plt
 
 from mandrillage.dataset import (
     MandrillImageDataset,
@@ -198,26 +200,51 @@ class BasicRegressionPipeline(Pipeline):
     def init_loggers(self):
         pass
 
-    def mean_std(self, loader, model, device):
+    def compute_std(self, df):
         predictions = {}
-        days_scale = self.max_days if self.config.dataset.normalize_y else 1
-        xs = []
-        for x_batch, y_batch in tqdm(loader, leave=True):
-            x_batch = x_batch.to(device)
-            y_pred_batch = model(x_batch)
-            for i in range(x_batch.shape[0]):
-                xs.append(x_batch[i])
-                y, y_pred = y_batch[i], y_pred_batch[i]
-                y = y.detach().cpu().numpy() * days_scale
-                if y not in predictions:
-                    predictions[y] = []
-                predictions[y].append(y_pred.detach().cpu().numpy() * days_scale)
 
+        # Gather data per id per age range
+        for i in tqdm(range(len(df))):
+            row = df.iloc[[i]]
+            y_true = np.round(row["y_true"].values[0].numpy() * self.days_scale)
+            y_pred = np.round(row["y_pred"].values[0].numpy() * self.days_scale)
+            if y_true not in predictions:
+                predictions[y_true] = {}
+            id_ = row["id"].values[0]
+            if id_ not in predictions[y_true]:
+                predictions[y_true][id_] = []
+
+            abs_error = abs(y_true - y_pred)
+            predictions[y_true][id_].append(abs_error)
+
+        # Compute mean per id per age when multiple photo occurs
         std_by_value = {}
+        std_by_value_by_id = {}
         mean_by_value = {}
-        for y, values in predictions.items():
-            std_by_value[y] = np.std(np.array(values))
-            mean_by_value[y] = np.mean(np.array(values))
+        # For each unique age value
+        for age in predictions.keys():
+            age_data = predictions[age]
+
+            # Compute std per id with nb photo > 1
+            age_stds_by_id = []
+            for id_ in age_data.keys():
+                if len(age_data[id_]) > 1:
+                    current_std = np.std(np.array(age_data[id_]))
+                    age_stds_by_id.append(current_std)
+            age_std_by_id = np.mean(age_stds_by_id)
+            if not np.isnan(age_std_by_id):
+                std_by_value_by_id[age] = age_std_by_id
+
+            # Compute std by age globally
+            values = []
+            for errors in age_data.values():
+                values.extend(errors)
+            std_by_value[age] = np.std(np.array(values))
+            mean_by_value[age] = np.mean(np.array(values))
+
+        print(predictions)
+        print(std_by_value)
+        print(std_by_value_by_id)
 
         fig = display_predictions(
             predictions,
@@ -226,7 +253,7 @@ class BasicRegressionPipeline(Pipeline):
             os.path.join(self.output_dir, "latest_val_performance"),
         )
 
-        return np.mean(list(std_by_value.values())), fig
+        return std_by_value, std_by_value_by_id
 
     def save_best_val_loss(self, val_loss, best_val):
         if val_loss < best_val:
@@ -257,6 +284,56 @@ class BasicRegressionPipeline(Pipeline):
         y_pred = self.sim_model((x1, x2))
         sim_loss = self.sim_criterion(y_pred, y)
         return sim_loss, self.get_size(x1)
+
+    def collect_validation(self, dataset, model):
+        y_true = []
+        y_pred = []
+        metadatas = []
+        errors = []
+        for i in tqdm(range(len(dataset)), leave=False):
+            x, y = dataset[i]
+            x = torch.tensor(x, device=self.device)
+            metadata = dataset.get_metadata_at_index(i)
+            prediction = model(torch.unsqueeze(x, axis=0))
+            prediction = prediction[0].detach().cpu()
+
+            y_true.append(y)
+            y_pred.append(prediction)
+            metadatas.append(metadata["id"])
+            errors.append(abs(y - prediction))
+
+        df = pd.DataFrame({"y_pred": y_pred, "y_true": y_true, "id": metadatas, "error": errors})
+
+        return df
+
+    def val_loss_from_df(self, df, loss):
+        y_true = torch.tensor(df["y_true"])
+        y_pred = torch.tensor(df["y_pred"])
+        return loss(y_pred, y_true)
+
+    def display_n_worst_cases(self, df, dataset, max_n, epoch):
+        n = min(max_n, len(df))
+
+        # Make directories
+        worst_cases_dir = os.path.join(self.output_dir, f"worst_{n}_cases")
+        os.makedirs(worst_cases_dir, exist_ok=True)
+        epoch_worst_cases_dir = os.path.join(worst_cases_dir, f"{epoch}")
+        os.makedirs(epoch_worst_cases_dir, exist_ok=True)
+
+        sorted_df = df.sort_values("error", ascending=False)
+
+        for i in range(n):
+            row = sorted_df.iloc[[i]]
+            real_index = row.index.values[0]
+
+            x, y = dataset[real_index]
+            y_pred = np.round(row["y_pred"].values[0].numpy() * self.days_scale)
+            y = np.round(y.numpy() * self.days_scale)
+
+            plt.imshow(x.permute(1, 2, 0))
+            plt.title(f"Predicted: {y_pred}, Real: {y}, Error: {abs(y - y_pred)}")
+            plt.savefig(os.path.join(epoch_worst_cases_dir, f"{i}_{real_index}.png"))
+            plt.close()
 
     def train(self):
         if self.resume:
@@ -339,24 +416,29 @@ class BasicRegressionPipeline(Pipeline):
             val_losses = {}
 
             with torch.no_grad():
+                # Predict on validation dataset sample per sample to get metadata
+                df = self.collect_validation(self.val_dataset, self.model)
+
                 for val_name, val_fnct in self.val_criterions.items():
-                    val_losses[val_name] = self.val_loss(
-                        self.val_loader, self.model, val_fnct, self.device
-                    )
+                    val_losses[val_name] = self.val_loss_from_df(df, val_fnct)
                     val_losses[val_name] /= len(self.val_dataset)
 
                 # Add mean std
-                mean_std, fig = self.mean_std(
-                    loader=self.val_loader, model=self.model, device=self.device
-                )
-                val_losses["mean_std"] = mean_std
+                std_by_age, std_by_age_by_id = self.compute_std(df)
+                val_losses["mean_std"] = np.mean(list(std_by_age.values()))
                 # mlflow.log_figure(fig, "mean_std")
+
+                # Add mean std per id per age
+                val_losses["mean_std_by_id_by_age"] = np.mean(list(std_by_age_by_id.values()))
+
+                self.display_n_worst_cases(df, self.val_dataset, max_n=10, epoch=epoch)
 
             val_loss = val_losses[self.watch_val_loss]
             best_val = self.save_best_val_loss(val_loss, best_val)
 
             mlflow.log_metric("val_loss", val_loss, step=epoch)
             mlflow.log_metric("val_loss_std", val_losses["mean_std"], step=epoch)
+            mlflow.log_metric("val_loss_std_by_id", val_losses["mean_std_by_id_by_age"], step=epoch)
             mlflow.log_metric("best_val_loss", best_val, step=epoch)
 
             # Print training and validation metrics
@@ -471,3 +553,4 @@ class BasicRegressionPipeline(Pipeline):
 
     def init_parameters(self):
         super().init_parameters()
+        self.days_scale = self.max_days if self.config.dataset.normalize_y else 1

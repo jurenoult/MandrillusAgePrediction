@@ -121,27 +121,6 @@ def resample(df, bins):
 
 import albumentations as A
 
-
-# AUGMENTATION_PIPELINE = A.Compose(
-#     [
-#         A.Flip(p=0.5),
-#         A.ShiftScaleRotate(
-#             p=0.5,
-#             shift_limit=0.0,
-#             scale_limit=0.95,
-#             rotate_limit=45,
-#             border_mode=cv2.BORDER_CONSTANT,
-#         ),
-#         A.OneOf(
-#             [A.Blur(blur_limit=5, p=1.0),
-#              A.Defocus(alias_blur=(0.1, 0.2), p=1.0)
-#             ],
-#             p=0.5,
-#         ),
-#         A.CoarseDropout(max_holes=3, max_height=16, max_width=16, min_holes=1),
-#     ],
-#     p=0.5,
-# )
 AUGMENTATION_PIPELINE = A.Compose(
     [
         A.OneOf(
@@ -316,7 +295,6 @@ class MandrillImageDataset(Dataset):
         # Normalization
         if normalize:
             image = image.astype(np.float32) / 255.0
-            # image = (image - image.min()) / image.ptp()
 
         return image
 
@@ -364,6 +342,10 @@ class MandrillImageDataset(Dataset):
         # All datas for this mandrill
         row = self.df.iloc[[idx]]
         return self._getpair_from_row(row, idx)
+
+    def get_metadata_at_index(self, idx):
+        row = self.df.iloc[[idx]]
+        return {"id": self.value_to_str(row["id"]), "age": self.value_to_str(row["age"])}
 
     def set_images(self, images):
         self.images = images
