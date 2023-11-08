@@ -165,7 +165,7 @@ class AugmentedDataset(Dataset):
         image = AUGMENTATION_PIPELINE(image=image)["image"]
         image = np.moveaxis(image, -1, 0)
         image = image.astype(np.float32) / 255
-        return image
+        return torch.tensor(image)
 
     def __getitem__(self, idx):
         x, y = self.subset[idx]
@@ -173,6 +173,9 @@ class AugmentedDataset(Dataset):
 
     def classes(self):
         return self.subset.classes()
+
+    def get_metadata_at_index(self, i):
+        return self.subset.get_metadata_at_index(i)
 
     def filter_by_age(self, max_age):
         self.subset.filter_by_age(max_age)
@@ -294,7 +297,8 @@ class MandrillImageDataset(Dataset):
 
         # Normalization
         if normalize:
-            image = image.astype(np.float32) / 255.0
+            # image = image.astype(np.float32) / 255.0
+            image = (image - image.min()) / image.ptp()
 
         return image
 

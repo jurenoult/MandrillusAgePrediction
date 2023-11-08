@@ -12,6 +12,8 @@ import mlflow
 import pandas as pd
 import matplotlib.pyplot as plt
 
+from torch.profiler import profile, record_function, ProfilerActivity
+
 from mandrillage.dataset import (
     MandrillImageDataset,
     read_dataset,
@@ -200,30 +202,36 @@ class BasicRegressionPipeline(Pipeline):
     def init_loggers(self):
         pass
 
-    def compute_std(self, df):
+    def compute_std(self, df, display_name="val"):
+        predicted_error = {}
         predictions = {}
 
         # Gather data per id per age range
         for i in tqdm(range(len(df))):
             row = df.iloc[[i]]
-            y_true = np.round(row["y_true"].values[0].numpy() * self.days_scale)
-            y_pred = np.round(row["y_pred"].values[0].numpy() * self.days_scale)
-            if y_true not in predictions:
-                predictions[y_true] = {}
+            y_true = row["y_true"].values[0]
+            y_pred = row["y_pred"].values[0]
+            if y_true not in predicted_error:
+                predicted_error[y_true] = {}
             id_ = row["id"].values[0]
-            if id_ not in predictions[y_true]:
-                predictions[y_true][id_] = []
+            if id_ not in predicted_error[y_true]:
+                predicted_error[y_true][id_] = []
 
             abs_error = abs(y_true - y_pred)
-            predictions[y_true][id_].append(abs_error)
+            predicted_error[y_true][id_].append(abs_error)
+
+            if y_true not in predictions:
+                predictions[y_true] = []
+            predictions[y_true].append(y_pred)
 
         # Compute mean per id per age when multiple photo occurs
         std_by_value = {}
         std_by_value_by_id = {}
         mean_by_value = {}
         # For each unique age value
-        for age in predictions.keys():
-            age_data = predictions[age]
+        for age in predicted_error.keys():
+            age_data = predicted_error[age]
+            age_pred = predictions[age]
 
             # Compute std per id with nb photo > 1
             age_stds_by_id = []
@@ -236,22 +244,19 @@ class BasicRegressionPipeline(Pipeline):
                 std_by_value_by_id[age] = age_std_by_id
 
             # Compute std by age globally
-            values = []
-            for errors in age_data.values():
-                values.extend(errors)
-            std_by_value[age] = np.std(np.array(values))
-            mean_by_value[age] = np.mean(np.array(values))
+            std_by_value[age] = np.std(np.array(age_pred))
+            mean_by_value[age] = np.mean(np.array(age_pred))
 
         fig = display_predictions(
             predictions,
             std_by_value,
             mean_by_value,
-            os.path.join(self.output_dir, "latest_val_performance"),
+            os.path.join(self.output_dir, f"latest_{display_name}_performance"),
         )
 
         return std_by_value, std_by_value_by_id
 
-    def save_best_val_loss(self, val_loss, best_val):
+    def save_best_val_loss(self, val_loss, best_val, df):
         if val_loss < best_val:
             log.info(
                 f"Val loss {self.watch_val_loss} improved from {best_val:.4f} to {val_loss:.4f}"
@@ -263,6 +268,7 @@ class BasicRegressionPipeline(Pipeline):
                 exp_name=self.name,
                 output_dir=self.output_dir,
             )
+            df.to_csv(os.path.join(self.output_dir, "val_raw_predictions.csv"))
         else:
             log.info(f"Val loss did not improved from {best_val:.4f}")
         return best_val
@@ -294,6 +300,9 @@ class BasicRegressionPipeline(Pipeline):
             prediction = model(torch.unsqueeze(x, axis=0))
             prediction = prediction[0].detach().cpu()
 
+            y = np.round(y.numpy() * self.days_scale)
+            prediction = np.round(prediction.numpy() * self.days_scale)
+
             y_true.append(y)
             y_pred.append(prediction)
             metadatas.append(metadata["id"])
@@ -313,8 +322,10 @@ class BasicRegressionPipeline(Pipeline):
         return df
 
     def val_loss_from_df(self, df, loss):
-        y_true = torch.unsqueeze(torch.tensor(df["y_true"]), axis=-1)
-        y_pred = torch.unsqueeze(torch.tensor(df["y_pred"]), axis=-1)
+        y_true = torch.tensor(np.array(list(df["y_true"])))
+        y_true = torch.unsqueeze(y_true, axis=-1)
+        y_pred = torch.tensor(np.array(list(df["y_pred"])))
+        y_pred = torch.unsqueeze(y_pred, axis=-1)
         return loss(y_pred, y_true)
 
     def display_n_worst_cases(self, df, dataset, max_n, epoch):
@@ -334,8 +345,8 @@ class BasicRegressionPipeline(Pipeline):
             photo_id = row["photo_path"].values[0]
 
             x, y = dataset[real_index]
-            y_pred = np.round(row["y_pred"].values[0].numpy() * self.days_scale)
-            y = np.round(y.numpy() * self.days_scale)
+            y_pred = row["y_pred"].values[0]
+            y = y
 
             plt.imshow(x.permute(1, 2, 0))
             plt.title(f"Predicted: {y_pred}, Real: {y}, Error: {abs(y - y_pred)}")
@@ -368,6 +379,14 @@ class BasicRegressionPipeline(Pipeline):
         }
         print(ages_steps)
 
+        # prof = torch.profiler.profile(
+        #     schedule=torch.profiler.schedule(wait=0, warmup=0, active=1, repeat=1),
+        #     on_trace_ready=torch.profiler.tensorboard_trace_handler("./logs/regression_profiler"),
+        #     record_shapes=False,
+        #     with_stack=False,
+        # )
+        # prof.start()
+
         # Training loop
         best_val = np.inf
         pbar = tqdm(range(self.epochs))
@@ -381,7 +400,7 @@ class BasicRegressionPipeline(Pipeline):
             train_sim_loss = 0.0
 
             for i in tqdm(range(len(self.train_loader)), leave=True):
-                self.optimizer.zero_grad()
+                # self.optimizer.zero_grad()
 
                 reg_loss, reg_size = self.train_step(
                     self.train_loader,
@@ -422,25 +441,26 @@ class BasicRegressionPipeline(Pipeline):
             self.model.eval()  # Set the model to evaluation mode
             val_losses = {}
 
+            val_df = None
             with torch.no_grad():
                 # Predict on validation dataset sample per sample to get metadata
-                df = self.collect_data(self.val_dataset, self.model)
+                val_df = self.collect_data(self.val_dataset, self.model)
 
                 for val_name, val_fnct in self.val_criterions.items():
-                    val_losses[val_name] = self.val_loss_from_df(df, val_fnct)
+                    val_losses[val_name] = self.val_loss_from_df(val_df, val_fnct)
 
                 # Add mean std
-                std_by_age, std_by_age_by_id = self.compute_std(df)
+                std_by_age, std_by_age_by_id = self.compute_std(val_df)
                 val_losses["mean_std"] = np.mean(list(std_by_age.values()))
                 # mlflow.log_figure(fig, "mean_std")
 
                 # Add mean std per id per age
                 val_losses["mean_std_by_id_by_age"] = np.mean(list(std_by_age_by_id.values()))
 
-                self.display_n_worst_cases(df, self.val_dataset, max_n=10, epoch=epoch)
+                self.display_n_worst_cases(val_df, self.val_dataset, max_n=10, epoch=epoch)
 
             val_loss = val_losses[self.watch_val_loss]
-            best_val = self.save_best_val_loss(val_loss, best_val)
+            best_val = self.save_best_val_loss(val_loss, best_val, val_df)
 
             mlflow.log_metric("val_loss", val_loss, step=epoch)
             mlflow.log_metric("val_loss_std", val_losses["mean_std"], step=epoch)
@@ -464,6 +484,8 @@ class BasicRegressionPipeline(Pipeline):
                 exp_name=self.name,
                 output_dir=self.output_dir,
             )
+
+        # prof.stop()
         return best_val
 
     def predict_from_dataset(self, x):
@@ -493,8 +515,8 @@ class BasicRegressionPipeline(Pipeline):
                 y = y.detach().cpu().numpy()
                 x = x.detach().cpu()
 
-                y = y * self.days_scale
-                y_hat = y_hat * self.days_scale
+                y = np.round(y * self.days_scale)
+                y_hat = np.round(y_hat * self.days_scale)
 
                 individual_y_true.append(y)
                 individual_y_pred.append(y_hat)

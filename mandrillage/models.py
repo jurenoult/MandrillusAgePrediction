@@ -139,7 +139,7 @@ class RegressionHead(nn.Module):
 
     def block(self, in_features, out_features):
         lin = nn.Linear(in_features, out_features)
-        gelu = nn.ReLU()
+        gelu = nn.GELU()
         return nn.Sequential(lin, gelu)
 
     # def _init_weights(self, m):
