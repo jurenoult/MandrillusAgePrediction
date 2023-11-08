@@ -129,14 +129,13 @@ class RegressionHead(nn.Module):
             self.blocks = nn.Sequential(lin_layers)
         self.input_dim = input_dim
         self.output_dim = output_dim
-        self.linear = nn.Linear(last_feature_size, output_dim, bias=False)
+        self.linear = nn.Linear(last_feature_size, output_dim, bias=True)
 
         if sigmoid:
             self.activation = nn.Sigmoid()
         else:
             # self.activation = boundReLU(min_value=0, max_value=2.0)
             self.activation = None
-        # self.sigmoid = sigmoid
 
     def block(self, in_features, out_features):
         lin = nn.Linear(in_features, out_features)

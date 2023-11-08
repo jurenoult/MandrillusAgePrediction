@@ -305,7 +305,7 @@ class MandrillImageDataset(Dataset):
 
     def photo_path(self, row):
         photo_path = self.photo_path_native(row)
-        path = os.path.join(self.root_dir, photo_path)        
+        path = os.path.join(self.root_dir, photo_path)
         return path
 
     def photo_path_native(self, row):

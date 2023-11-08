@@ -242,10 +242,6 @@ class BasicRegressionPipeline(Pipeline):
             std_by_value[age] = np.std(np.array(values))
             mean_by_value[age] = np.mean(np.array(values))
 
-        print(predictions)
-        print(std_by_value)
-        print(std_by_value_by_id)
-
         fig = display_predictions(
             predictions,
             std_by_value,
@@ -285,7 +281,7 @@ class BasicRegressionPipeline(Pipeline):
         sim_loss = self.sim_criterion(y_pred, y)
         return sim_loss, self.get_size(x1)
 
-    def collect_validation(self, dataset, model):
+    def collect_data(self, dataset, model):
         y_true = []
         y_pred = []
         metadatas = []
@@ -293,7 +289,7 @@ class BasicRegressionPipeline(Pipeline):
         errors = []
         for i in tqdm(range(len(dataset)), leave=False):
             x, y = dataset[i]
-            x = torch.tensor(x, device=self.device)
+            x = x.to(self.device)
             metadata = dataset.get_metadata_at_index(i)
             prediction = model(torch.unsqueeze(x, axis=0))
             prediction = prediction[0].detach().cpu()
@@ -317,8 +313,8 @@ class BasicRegressionPipeline(Pipeline):
         return df
 
     def val_loss_from_df(self, df, loss):
-        y_true = torch.tensor(df["y_true"])
-        y_pred = torch.tensor(df["y_pred"])
+        y_true = torch.unsqueeze(torch.tensor(df["y_true"]), axis=-1)
+        y_pred = torch.unsqueeze(torch.tensor(df["y_pred"]), axis=-1)
         return loss(y_pred, y_true)
 
     def display_n_worst_cases(self, df, dataset, max_n, epoch):
@@ -428,11 +424,10 @@ class BasicRegressionPipeline(Pipeline):
 
             with torch.no_grad():
                 # Predict on validation dataset sample per sample to get metadata
-                df = self.collect_validation(self.val_dataset, self.model)
+                df = self.collect_data(self.val_dataset, self.model)
 
                 for val_name, val_fnct in self.val_criterions.items():
                     val_losses[val_name] = self.val_loss_from_df(df, val_fnct)
-                    val_losses[val_name] /= len(self.val_dataset)
 
                 # Add mean std
                 std_by_age, std_by_age_by_id = self.compute_std(df)
@@ -487,8 +482,6 @@ class BasicRegressionPipeline(Pipeline):
         prediction_outputdir = os.path.join(self.output_dir, f"prediction_{self.train_index}")
         os.makedirs(prediction_outputdir, exist_ok=True)
 
-        days_scale = self.max_days if self.config.dataset.normalize_y else 1
-
         for _id, group in tqdm(ids):
             individual_outputdir = os.path.join(prediction_outputdir, str(_id))
             os.makedirs(individual_outputdir, exist_ok=True)
@@ -500,8 +493,8 @@ class BasicRegressionPipeline(Pipeline):
                 y = y.detach().cpu().numpy()
                 x = x.detach().cpu()
 
-                y = y * days_scale
-                y_hat = y_hat * days_scale
+                y = y * self.days_scale
+                y_hat = y_hat * self.days_scale
 
                 individual_y_true.append(y)
                 individual_y_pred.append(y_hat)
@@ -564,4 +557,4 @@ class BasicRegressionPipeline(Pipeline):
 
     def init_parameters(self):
         super().init_parameters()
-        self.days_scale = self.max_days if self.config.dataset.normalize_y else 1
+        self.days_scale = self.max_days if self.config.dataset.normalize_y else 365

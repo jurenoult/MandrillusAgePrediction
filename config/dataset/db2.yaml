@@ -1,7 +1,7 @@
 basepath: "data/db2/"
 metadata: "MFD_metadatas.csv"
 images: "Images"
-max_age: 3
+max_age: 25
 dob_certain_only: False
 max_dob_error: 15
 in_memory: True
