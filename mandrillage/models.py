@@ -136,6 +136,7 @@ class RegressionHead(nn.Module):
         else:
             # self.activation = boundReLU(min_value=0, max_value=2.0)
             self.activation = None
+        self.zero_tensor = torch.tensor(0.0)
 
     def block(self, in_features, out_features):
         lin = nn.Linear(in_features, out_features)
@@ -158,6 +159,10 @@ class RegressionHead(nn.Module):
 
         if self.activation:
             x = self.activation(x)
+
+        # Post processing to have only positive values
+        if not self.training:
+            x = torch.max(self.zero_tensor, x)
         return x
 
 
