@@ -199,7 +199,9 @@ class BasicRegressionPipeline(Pipeline):
         if self.sim_model:
             all_parameters += list(self.sim_model.parameters())
 
-        self.optimizer = Lion(all_parameters, lr=self.learning_rate, weight_decay=1e-2)
+        self.optimizer = Lion(
+            all_parameters, lr=self.learning_rate, weight_decay=1e-2, use_triton=True
+        )
         # self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
 
     def init_callbacks(self):
