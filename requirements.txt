@@ -16,3 +16,4 @@ tlt
 torchfile
 einops
 xformers
+lion-pytorch
