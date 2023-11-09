@@ -308,7 +308,6 @@ class BasicRegressionPipeline(Pipeline):
 
             prediction_stack.append(x)
             if len(prediction_stack) >= min_size_predict or i == n - 1:
-                print(len(prediction_stack))
                 prediction_stack = torch.stack(prediction_stack)
                 predictions = model(prediction_stack)
 
