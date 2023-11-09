@@ -169,8 +169,11 @@ class BasicRegressionPipeline(Pipeline):
 
         self.backbone = self.backbone.to(self.device)
         self.model = self.model.to(self.device)
+        # self.model = torch.compile(self.model)
+
         if self.sim_model:
             self.sim_model = self.sim_model.to(self.device)
+            # self.sim_model = torch.compile(self.sim_model)
 
     def init_losses(self):
         train_error_function = hydra.utils.instantiate(self.config.train_regression_loss)

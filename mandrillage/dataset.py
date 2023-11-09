@@ -300,7 +300,7 @@ class MandrillImageDataset(Dataset):
             # image = image.astype(np.float32) / 255.0
             image = (image - image.min()) / image.ptp()
 
-        return image
+        return image.astype(np.float16)
 
     def value_to_str(self, value):
         if not isinstance(value, str):
