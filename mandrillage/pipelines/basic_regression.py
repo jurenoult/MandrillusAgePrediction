@@ -12,6 +12,8 @@ import mlflow
 import pandas as pd
 import matplotlib.pyplot as plt
 
+from lion_pytorch import Lion
+
 from torch.profiler import profile, record_function, ProfilerActivity
 
 from mandrillage.dataset import (
@@ -194,7 +196,8 @@ class BasicRegressionPipeline(Pipeline):
         if self.sim_model:
             all_parameters += list(self.sim_model.parameters())
 
-        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        self.optimizer = Lion(all_parameters, lr=self.learning_rate, weight_decay=1e-2)
+        # self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
 
     def init_callbacks(self):
         pass
@@ -387,6 +390,10 @@ class BasicRegressionPipeline(Pipeline):
         # )
         # prof.start()
 
+        # Creates once at the beginning of training
+        # Scales the gradients
+        scaler = torch.cuda.amp.GradScaler()
+
         # Training loop
         best_val = np.inf
         pbar = tqdm(range(self.epochs))
@@ -400,7 +407,7 @@ class BasicRegressionPipeline(Pipeline):
             train_sim_loss = 0.0
 
             for i in tqdm(range(len(self.train_loader)), leave=True):
-                # self.optimizer.zero_grad()
+                self.optimizer.zero_grad()
 
                 reg_loss, reg_size = self.train_step(
                     self.train_loader,
@@ -422,8 +429,17 @@ class BasicRegressionPipeline(Pipeline):
                     loss = reg_loss
 
                 # Backward pass and optimization
+
+                # Scales the loss, and calls backward()
+                # to create scaled gradients
+                # scaler.scale(loss).backward()
                 loss.backward()
+
+                # scaler.step(self.optimizer)
                 self.optimizer.step()
+
+                # Updates the scale for next iteration
+                # scaler.update()
 
                 train_loss += reg_loss.item() * reg_size
 

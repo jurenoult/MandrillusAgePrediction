@@ -132,10 +132,10 @@ class Pipeline(object):
         x, y = self.xy_to_device(x, y, device)
         optimizer.zero_grad()
 
-        # Forward pass
-        y_hat = model(x)
-        loss = criterion(y_hat, y)
-
+        with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
+            # Forward pass
+            y_hat = model(x)
+            loss = criterion(y_hat, y)
         size = self.get_size(x)
 
         return loss, size
