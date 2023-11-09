@@ -293,27 +293,42 @@ class BasicRegressionPipeline(Pipeline):
         sim_loss = self.sim_criterion(y_pred, y)
         return sim_loss, self.get_size(x1)
 
-    def collect_data(self, dataset, model):
+    def collect_data(self, dataset, model, min_size_predict=128):
         y_true = []
         y_pred = []
         metadatas = []
         photo_paths = []
         errors = []
-        for i in tqdm(range(len(dataset)), leave=False):
+        prediction_stack = []
+        n = len(dataset)
+        for i in tqdm(range(n), leave=False):
             x, y = dataset[i]
             x = x.to(self.device)
             metadata = dataset.get_metadata_at_index(i)
-            prediction = model(torch.unsqueeze(x, axis=0))
-            prediction = prediction[0].detach().cpu()
+
+            prediction_stack.append(x)
+            if len(prediction_stack) >= min_size_predict or i == n - 1:
+                print(len(prediction_stack))
+                prediction_stack = torch.stack(prediction_stack)
+                predictions = model(prediction_stack)
+
+                for j in range(predictions.shape[0]):
+                    prediction = predictions[j].detach().cpu()
+                    prediction = np.round(prediction.numpy() * self.days_scale)
+                    y_pred.append(prediction)
+
+                prediction_stack = []
+            # prediction = model(torch.unsqueeze(x, axis=0))
+            # prediction = prediction[0].detach().cpu()
 
             y = np.round(y.numpy() * self.days_scale)
-            prediction = np.round(prediction.numpy() * self.days_scale)
-
             y_true.append(y)
-            y_pred.append(prediction)
             metadatas.append(metadata["id"])
             photo_paths.append(metadata["photo_path"])
-            errors.append(abs(y - prediction))
+
+        assert len(y_pred) == len(y_true)
+
+        errors = [abs(y - y_hat) for y, y_hat in zip(y_true, y_pred)]
 
         df = pd.DataFrame(
             {
@@ -435,14 +450,14 @@ class BasicRegressionPipeline(Pipeline):
 
                 # Scales the loss, and calls backward()
                 # to create scaled gradients
-                # scaler.scale(loss).backward()
-                loss.backward()
+                scaler.scale(loss).backward()
+                # loss.backward()
 
-                # scaler.step(self.optimizer)
-                self.optimizer.step()
+                scaler.step(self.optimizer)
+                # self.optimizer.step()
 
                 # Updates the scale for next iteration
-                # scaler.update()
+                scaler.update()
 
                 train_loss += reg_loss.item() * reg_size
 
