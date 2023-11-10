@@ -1,9 +1,11 @@
 import logging
 from collections import OrderedDict
 
+import os
 import timm
+
 import torch
-import torch.functional as F
+import torch.nn.functional as F
 import torch.nn as nn
 import torchfile
 from coral_pytorch.layers import CoralLayer
@@ -25,11 +27,17 @@ class ConvNext(nn.Module):
             name,
             pretrained=False,
             num_classes=0,  # remove classifier nn.Linear
-            checkpoint_path=path,
         )
 
     def load_weights(self, path):
-        self.load_model(self.name, path)
+        if os.path.exists(path):
+            try:
+                import safetensors
+
+                log.info("Loading pretrained weights...")
+                safetensors.torch.load_file(path, device="cuda")
+            except ImportError:
+                log.info("Failed to load safetensors")
 
     def forward(self, x):
         x = self.backbone.forward_features(x)

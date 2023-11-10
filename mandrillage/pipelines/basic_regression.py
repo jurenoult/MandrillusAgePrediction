@@ -290,7 +290,7 @@ class BasicRegressionPipeline(Pipeline):
         sim_loss = self.sim_criterion(y_pred, y)
         return sim_loss, self.get_size(x1)
 
-    def collect_data(self, dataset, model, min_size_predict=128):
+    def collect_data(self, dataset, model, min_size_predict=32):
         y_true = []
         y_pred = []
         metadatas = []
@@ -379,10 +379,10 @@ class BasicRegressionPipeline(Pipeline):
         cs_values_in_days = [np.round(val * DAYS_IN_YEAR) for val in cs_values_in_years]
 
         css = {}
-        for max_error in cs_values_in_days:
-            nb_correct = sum(error <= cs_values_in_days)
+        for i, max_error in enumerate(cs_values_in_days):
+            nb_correct = sum(error <= max_error)
             cs = float(nb_correct) / float(nb_values)
-            css[f"CS_{max_error}"] = cs
+            css[f"{i}_CS_{max_error}"] = cs
         return css
 
     def train(self):
