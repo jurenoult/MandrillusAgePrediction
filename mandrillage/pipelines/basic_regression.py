@@ -290,7 +290,7 @@ class BasicRegressionPipeline(Pipeline):
         sim_loss = self.sim_criterion(y_pred, y)
         return sim_loss, self.get_size(x1)
 
-    def collect_data(self, dataset, model, min_size_predict=32):
+    def collect_data(self, dataset, model, min_size_predict=256):
         y_true = []
         y_pred = []
         metadatas = []
