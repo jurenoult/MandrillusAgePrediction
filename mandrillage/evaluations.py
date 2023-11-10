@@ -4,9 +4,20 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 
+from mandrillage.utils import DAYS_IN_YEAR
+
 
 def standard_regression_evaluation(y_true, y_pred, name, min_range, max_range):
-    steps = [365 / 36, 365 / 24, 365 / 16, 365 / 12, 365 / 6, 365 / 4, 365 / 2, 365.0]
+    steps = [
+        DAYS_IN_YEAR / 36,
+        DAYS_IN_YEAR / 24,
+        DAYS_IN_YEAR / 16,
+        DAYS_IN_YEAR / 12,
+        DAYS_IN_YEAR / 6,
+        DAYS_IN_YEAR / 4,
+        DAYS_IN_YEAR / 2,
+        DAYS_IN_YEAR,
+    ]
     regression_name = f"{name}_regression"
     regression_results = evaluate_regression(
         y_true, y_pred, steps, min_range, max_range, regression_name

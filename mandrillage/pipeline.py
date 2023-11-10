@@ -10,6 +10,8 @@ import mlflow
 
 log = logging.getLogger(__name__)
 
+from mandrillage.utils import DAYS_IN_YEAR
+
 
 class Pipeline(object):
     def __init__(self) -> None:
@@ -48,7 +50,7 @@ class Pipeline(object):
     def init_parameters(self):
         self.name = self.config.name
         self.max_age = self.config.dataset.max_age
-        self.max_days = 365 * self.max_age
+        self.max_days = DAYS_IN_YEAR * self.max_age
         self.max_dob_error = self.config.dataset.max_dob_error
         self.dataset_metadata_path = os.path.join(
             self.config.dataset.basepath, self.config.dataset.metadata

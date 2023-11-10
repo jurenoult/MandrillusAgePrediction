@@ -14,8 +14,6 @@ import matplotlib.pyplot as plt
 
 from lion_pytorch import Lion
 
-from torch.profiler import profile, record_function, ProfilerActivity
-
 from mandrillage.dataset import (
     MandrillImageDataset,
     read_dataset,
@@ -27,7 +25,7 @@ from mandrillage.evaluations import standard_regression_evaluation
 from mandrillage.models import SequentialModel
 from mandrillage.pipeline import Pipeline
 from mandrillage.display import display_predictions
-from mandrillage.utils import load, save, split_indices, create_kfold_data
+from mandrillage.utils import load, save, split_indices, create_kfold_data, DAYS_IN_YEAR
 
 log = logging.getLogger(__name__)
 
@@ -378,13 +376,13 @@ class BasicRegressionPipeline(Pipeline):
         nb_values = len(y_true)
 
         cs_values_in_years = [1 / 12, 1 / 6, 1 / 4, 1 / 3, 1 / 2, 1, 2, 3]
-        cs_values_in_days = [val * 365 for val in cs_values_in_years]
+        cs_values_in_days = [np.round(val * DAYS_IN_YEAR) for val in cs_values_in_years]
 
         css = {}
         for max_error in cs_values_in_days:
             nb_correct = sum(error <= cs_values_in_days)
             cs = float(nb_correct) / float(nb_values)
-            css[max_error] = cs
+            css[f"CS_{max_error}"] = cs
         return css
 
     def train(self):
@@ -523,6 +521,7 @@ class BasicRegressionPipeline(Pipeline):
             mlflow.log_metric("val_loss_std", val_losses["mean_std"], step=epoch)
             mlflow.log_metric("val_loss_std_by_id", val_losses["mean_std_by_id_by_age"], step=epoch)
             mlflow.log_metric("best_val_loss", best_val, step=epoch)
+            mlflow.log_metrics(css, step=epoch)
 
             # Print training and validation metrics
             val_str = " - ".join(
@@ -636,4 +635,4 @@ class BasicRegressionPipeline(Pipeline):
 
     def init_parameters(self):
         super().init_parameters()
-        self.days_scale = self.max_days if self.config.dataset.normalize_y else 365
+        self.days_scale = self.max_days if self.config.dataset.normalize_y else DAYS_IN_YEAR

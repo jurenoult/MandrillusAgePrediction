@@ -3,6 +3,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from mandrillage.utils import DAYS_IN_YEAR
+
 
 class MSEVariance(nn.Module):
     def __init__(self, sigma_weight=1.0, mse_weight=1.0):
@@ -112,9 +114,7 @@ class AdaptiveMarginLoss(nn.Module):
         self.stored_values.append((error, error * weight, y_pred, y_true))
 
         # Only penalize samples that are not within the margin distance
-        loss = torch.mean(
-            torch.max(distance * weight, torch.tensor(0.0).to(y_pred.device))
-        )
+        loss = torch.mean(torch.max(distance * weight, torch.tensor(0.0).to(y_pred.device)))
         return loss
 
 
@@ -192,9 +192,7 @@ def bmc_loss(pred, target, noise_var, device):
     target = torch.unsqueeze(target, dim=-1)
     pred = torch.unsqueeze(pred, dim=-1)
     logits = -(pred - target.T).pow(2) / (2 * noise_var)  # logit size: [batch, batch]
-    loss = F.cross_entropy(
-        logits, torch.arange(pred.shape[0]).to(device)
-    )  # contrastive-like loss
+    loss = F.cross_entropy(logits, torch.arange(pred.shape[0]).to(device))  # contrastive-like loss
     loss = (
         loss * (2 * noise_var).detach()
     )  # optional: restore the loss scale, 'detach' when noise is learnable
@@ -227,7 +225,7 @@ class GaussLoss(nn.Module):
 class BinaryRangeMetric(nn.Module):
     def __init__(self):
         super(BinaryRangeMetric, self).__init__()
-        self.epsilon = 1 / 365
+        self.epsilon = 1 / DAYS_IN_YEAR
 
     def forward(self, y_pred, y):
         y_pred_left = y_pred[..., 0]
@@ -250,7 +248,7 @@ class RangeLoss(nn.Module):
         self.alpha = alpha
         self.beta = beta
         # Equivalent to 0.5 day
-        self.epsilon = 1 / (365 * 2)
+        self.epsilon = 1 / (DAYS_IN_YEAR * 2)
 
     def forward(self, y_pred, y):
         y_pred_left = y_pred[..., 0]

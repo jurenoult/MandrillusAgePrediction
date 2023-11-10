@@ -10,6 +10,8 @@ from enum import IntEnum
 
 from torch.utils.data import Dataset
 
+from mandrillage.utils import DAYS_IN_YEAR
+
 CSV_ROWS = [
     "photo_name",
     "id",
@@ -266,7 +268,7 @@ class MandrillImageDataset(Dataset):
         self.full_df = self.df.copy()
 
     def filter_by_age(self, max_age):
-        max_age_days = int(max_age * 365)
+        max_age_days = int(max_age * DAYS_IN_YEAR)
         self.df = self.full_df[self.full_df["age"] <= max_age_days]
 
     def partition_by_age(self):
@@ -336,7 +338,7 @@ class MandrillImageDataset(Dataset):
             if self.normalize_y:
                 target = target / self.max_days
             else:
-                target = float(target) / 365.0
+                target = float(target) / float(DAYS_IN_YEAR)
 
         if self.in_mem and idx >= 0:
             image = self.images[idx]
@@ -502,7 +504,7 @@ class ClassificationMandrillImageDataset(MandrillImageDataset):
         img_size=(224, 224),
         in_mem=True,
         n_classes=2,
-        days_step=365,
+        days_step=DAYS_IN_YEAR,
         individuals_ids=[],
         return_integer=False,
     ):
