@@ -1,0 +1,2 @@
+_target_: mandrillage.models.ConvNext
+name: convnext_xxlarge.clip_laion2b_soup_ft_in1k

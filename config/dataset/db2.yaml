@@ -1,7 +1,7 @@
 basepath: "data/db2/"
 metadata: "MFD_metadatas.csv"
 images: "Images"
-max_age: 25
+max_age: 30
 dob_certain_only: False
 max_dob_error: 15
 in_memory: True
@@ -10,4 +10,4 @@ sex: null
 similarity_threshold:
   - factor: 0.05
   - min_days: 5
-normalize_y: True
+normalize_y: False

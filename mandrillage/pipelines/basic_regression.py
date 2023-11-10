@@ -169,11 +169,9 @@ class BasicRegressionPipeline(Pipeline):
 
         self.backbone = self.backbone.to(self.device)
         self.model = self.model.to(self.device)
-        # self.model = torch.compile(self.model)
 
         if self.sim_model:
             self.sim_model = self.sim_model.to(self.device)
-            # self.sim_model = torch.compile(self.sim_model)
 
     def init_losses(self):
         train_error_function = hydra.utils.instantiate(self.config.train_regression_loss)
@@ -199,8 +197,7 @@ class BasicRegressionPipeline(Pipeline):
         if self.sim_model:
             all_parameters += list(self.sim_model.parameters())
 
-        # self.optimizer = Lion(all_parameters, lr=self.learning_rate, weight_decay=1e-2)
-        self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        self.optimizer = Lion(all_parameters, lr=self.learning_rate, weight_decay=1e-2)
 
     def init_callbacks(self):
         pass
@@ -263,7 +260,9 @@ class BasicRegressionPipeline(Pipeline):
         return std_by_value, std_by_value_by_id
 
     def save_best_val_loss(self, val_loss, best_val, df):
+        improved = False
         if val_loss < best_val:
+            improved = True
             log.info(
                 f"Val loss {self.watch_val_loss} improved from {best_val:.4f} to {val_loss:.4f}"
             )
@@ -277,7 +276,7 @@ class BasicRegressionPipeline(Pipeline):
             df.to_csv(os.path.join(self.output_dir, "val_raw_predictions.csv"))
         else:
             log.info(f"Val loss did not improved from {best_val:.4f}")
-        return best_val
+        return best_val, improved
 
     def sim_train_step(
         self,
@@ -317,8 +316,6 @@ class BasicRegressionPipeline(Pipeline):
                     y_pred.append(prediction)
 
                 prediction_stack = []
-            # prediction = model(torch.unsqueeze(x, axis=0))
-            # prediction = prediction[0].detach().cpu()
 
             y = np.round(y.numpy() * self.days_scale)
             y_true.append(y)
@@ -414,6 +411,7 @@ class BasicRegressionPipeline(Pipeline):
         # Training loop
         best_val = np.inf
         pbar = tqdm(range(self.epochs))
+        improved_since = 0
         for epoch in pbar:
             self.update_from_ages_steps(ages_steps, epoch)
 
@@ -424,8 +422,6 @@ class BasicRegressionPipeline(Pipeline):
             train_sim_loss = 0.0
 
             for i in tqdm(range(len(self.train_loader)), leave=True):
-                self.optimizer.zero_grad()
-
                 reg_loss, reg_size = self.train_step(
                     self.train_loader,
                     self.optimizer,
@@ -450,10 +446,8 @@ class BasicRegressionPipeline(Pipeline):
                 # Scales the loss, and calls backward()
                 # to create scaled gradients
                 scaler.scale(loss).backward()
-                # loss.backward()
 
                 scaler.step(self.optimizer)
-                # self.optimizer.step()
 
                 # Updates the scale for next iteration
                 scaler.update()
@@ -493,7 +487,18 @@ class BasicRegressionPipeline(Pipeline):
                 self.display_n_worst_cases(val_df, self.val_dataset, max_n=10, epoch=epoch)
 
             val_loss = val_losses[self.watch_val_loss]
-            best_val = self.save_best_val_loss(val_loss, best_val, val_df)
+            best_val, improved = self.save_best_val_loss(val_loss, best_val, val_df)
+
+            # Early stopping
+            if not improved:
+                improved_since += 1
+            else:
+                improved_since = 0
+            if improved_since >= self.early_stopping_patience:
+                log.info(
+                    f"Stopping training since validation loss did not improved for {self.early_stopping_patience} epochs"
+                )
+                break
 
             mlflow.log_metric("val_loss", val_loss, step=epoch)
             mlflow.log_metric("val_loss_std", val_losses["mean_std"], step=epoch)

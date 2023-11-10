@@ -68,6 +68,8 @@ class Pipeline(object):
 
         self.kfold = self.config.kfold
 
+        self.early_stopping_patience = self.config.training.early_stopping_patience
+
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         log.info(f"Using device: {self.device}")
 

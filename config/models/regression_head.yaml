@@ -6,4 +6,4 @@ lin_start: 256
 n_lin: 0
 input_dim: 1
 output_dim: 1
-sigmoid: true
+sigmoid: False

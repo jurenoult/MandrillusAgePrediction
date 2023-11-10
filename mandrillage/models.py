@@ -5,6 +5,36 @@ import torch
 import torchfile
 import timm
 
+import logging
+
+log = logging.getLogger(__name__)
+
+
+class ConvNext(nn.Module):
+    def __init__(self, name="convnext_xxlarge.clip_laion2b_soup_ft_in1k"):
+        super(ConvNext, self).__init__()
+        log.info(f"Creating ConvNext model type: {name}")
+        self.name = name
+        self.load_model(self.name)
+        self.output_dim = self.backbone.num_features
+        log.info(f"ConvNext feature size : {self.backbone.num_features}")
+
+    def load_model(self, name, path=""):
+        self.backbone = timm.create_model(
+            name,
+            pretrained=False,
+            num_classes=0,  # remove classifier nn.Linear
+            checkpoint_path=path,
+        )
+
+    def load_weights(self, path):
+        self.load_model(self.name, path)
+
+    def forward(self, x):
+        x = self.backbone.forward_features(x)
+        x = self.backbone.head(x)
+        return x
+
 
 class boundReLU(nn.Module):
     def __init__(self, min_value, max_value):
