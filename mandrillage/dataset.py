@@ -251,21 +251,38 @@ class MandrillImageDataset(Dataset):
         self.data_classes = {}
         if self.in_mem:
             self.images = []
-            for i in tqdm(range(len(self.df))):
-                row = self.df.iloc[[i]]
-                self.images.append(self.load_photo(row))
-                age = row["age"].values[0]
-                _id = row["id"]
 
-                # by age & by id
-                age_id = f"{_id}_{age}"
+            parameters = [(self.df.iloc[[i]], i) for i in range(len(self.df))]
+            from tqdm.contrib.concurrent import process_map
 
-                if age_id not in self.data_classes:
-                    self.data_classes[age_id] = []
+            unsorted_images = process_map(
+                self.load_photo_with_id, parameters, max_workers=16, total=len(parameters)
+            )
+            # print(unsorted_images)
+            sorted_images = sorted(unsorted_images, key=lambda x: x[1], reverse=False)
+            # print(sorted_images)
+            self.images = [x for x, _ in sorted_images]
+            # print(images[:1])
+            # for i in tqdm(range(len(self.df))):
+            #     row = self.df.iloc[[i]]
+            #     self.images.append(self.load_photo(row))
+            # age = row["age"].values[0]
+            # _id = row["id"]
 
-                self.data_classes[age_id].append(i)
+            # by age & by id
+            # age_id = f"{_id}_{age}"
+
+            # if age_id not in self.data_classes:
+            #     self.data_classes[age_id] = []
+
+            # self.data_classes[age_id].append(i)
+            # print(self.images[:1])
 
         self.full_df = self.df.copy()
+
+    def load_photo_with_id(self, *args):
+        row, id = args[0]
+        return self.load_photo(row), id
 
     def filter_by_age(self, max_age):
         max_age_days = int(max_age * DAYS_IN_YEAR)
