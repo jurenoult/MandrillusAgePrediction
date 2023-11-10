@@ -11,3 +11,4 @@ similarity_threshold:
   - factor: 0.05
   - min_days: 5
 normalize_y: False
+im_size: 224

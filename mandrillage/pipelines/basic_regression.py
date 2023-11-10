@@ -77,6 +77,7 @@ class BasicRegressionPipeline(Pipeline):
         self.train_dataset = MandrillImageDataset(
             root_dir=self.dataset_images_path,
             dataframe=self.data,
+            img_size=self.img_size,
             in_mem=self.in_mem,
             max_days=self.max_days,
             individuals_ids=self.train_indices,
@@ -90,6 +91,7 @@ class BasicRegressionPipeline(Pipeline):
         self.train_similarity_dataset = MandrillSimilarityImageDataset(
             root_dir=self.dataset_images_path,
             dataframe=self.data,
+            img_size=self.img_size,
             in_mem=False,
             max_days=self.max_days,
             individuals_ids=self.train_indices,
@@ -104,6 +106,7 @@ class BasicRegressionPipeline(Pipeline):
         self.val_dataset = MandrillImageDataset(
             root_dir=self.dataset_images_path,
             dataframe=self.data,
+            img_size=self.img_size,
             in_mem=self.in_mem,
             max_days=self.max_days,
             individuals_ids=self.val_indices,

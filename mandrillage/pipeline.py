@@ -72,6 +72,8 @@ class Pipeline(object):
 
         self.early_stopping_patience = self.config.training.early_stopping_patience
 
+        self.img_size = (self.config.dataset.im_size, self.config.dataset.im_size)
+
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         log.info(f"Using device: {self.device}")
 
