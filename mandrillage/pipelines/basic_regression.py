@@ -364,7 +364,7 @@ class BasicRegressionPipeline(Pipeline):
 
             x, y = dataset[real_index]
             y_pred = row["y_pred"].values[0]
-            y = y
+            y = np.round(y * self.days_scale)
 
             plt.imshow(x.permute(1, 2, 0))
             plt.title(f"Predicted: {y_pred}, Real: {y}, Error: {abs(y - y_pred)}")
