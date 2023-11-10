@@ -370,6 +370,23 @@ class BasicRegressionPipeline(Pipeline):
             plt.savefig(os.path.join(epoch_worst_cases_dir, f"{i}_{photo_id}.png"))
             plt.close()
 
+    def compute_cumulative_scores(self, df):
+        y_pred = np.array(list(df["y_pred"]))
+        y_true = np.array(list(df["y_true"]))
+
+        error = abs(y_pred - y_true)
+        nb_values = len(y_true)
+
+        cs_values_in_years = [1 / 12, 1 / 6, 1 / 4, 1 / 3, 1 / 2, 1, 2, 3]
+        cs_values_in_days = [val * 365 for val in cs_values_in_years]
+
+        css = {}
+        for max_error in cs_values_in_days:
+            nb_correct = sum(error <= cs_values_in_days)
+            cs = float(nb_correct) / float(nb_values)
+            css[max_error] = cs
+        return css
+
     def train(self):
         if self.resume:
             self.model = load(
@@ -485,6 +502,8 @@ class BasicRegressionPipeline(Pipeline):
                 val_losses["mean_std_by_id_by_age"] = np.mean(list(std_by_age_by_id.values()))
 
                 self.display_n_worst_cases(val_df, self.val_dataset, max_n=10, epoch=epoch)
+
+                css = self.compute_cumulative_scores(val_df)
 
             val_loss = val_losses[self.watch_val_loss]
             best_val, improved = self.save_best_val_loss(val_loss, best_val, val_df)

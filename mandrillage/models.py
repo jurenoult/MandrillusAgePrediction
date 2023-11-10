@@ -1,11 +1,12 @@
-import torch.nn as nn
-from collections import OrderedDict
-from coral_pytorch.layers import CoralLayer
-import torch
-import torchfile
-import timm
-
 import logging
+from collections import OrderedDict
+
+import timm
+import torch
+import torch.functional as F
+import torch.nn as nn
+import torchfile
+from coral_pytorch.layers import CoralLayer
 
 log = logging.getLogger(__name__)
 
