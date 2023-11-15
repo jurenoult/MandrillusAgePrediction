@@ -39,11 +39,10 @@ class EvaNet(HuggingFaceModel):
     def __init__(self, name=""):
         log.info(f"Creating Evanet model type: {name}")
         super(EvaNet, self).__init__(name)
-        self.output_dim = self.backbone.num_features * 577
+        self.output_dim = self.backbone.num_features * 257
 
     def forward(self, x):
-        x = self.backbone.forward_features(x)
-        x = self.backbone.head(x)
+        x = self.backbone(x)
         x = x.view(x.size(0), -1)
         return x
 
