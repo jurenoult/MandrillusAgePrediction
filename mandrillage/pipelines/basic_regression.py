@@ -20,6 +20,9 @@ from mandrillage.dataset import (
     MandrillSimilarityImageDataset,
     AugmentedDataset,
     AugmentedSimilarityDataset,
+    filter_by_age,
+    filter_by_quality,
+    filter_by_faceview,
 )
 from mandrillage.evaluations import standard_regression_evaluation
 from mandrillage.models import SequentialModel
@@ -54,13 +57,12 @@ class BasicRegressionPipeline(Pipeline):
             shuffle=shuffle,
         )
 
-    def init_datamodule(self):
+    def prepare_data(self):
         # Read data
         self.data = read_dataset(
             self.dataset_metadata_path,
             filter_dob_error=True,
             filter_certainty=self.config.dataset.dob_certain_only,
-            max_age=self.max_days,
             max_dob_error=self.max_dob_error,
             sex=self.sex,
         )
@@ -73,14 +75,41 @@ class BasicRegressionPipeline(Pipeline):
                 self.data, k=self.kfold, fold_index=self.train_index
             )
 
-        # Create dataset based on indices
+        # Extract training set and validation set
+        self.data_train = self.data[self.data["id"].isin(self.train_indices)]
+        self.data_val = self.data[self.data["id"].isin(self.val_indices)]
+        self.data_train.reset_index(drop=True, inplace=True)
+        self.data_val.reset_index(drop=True, inplace=True)
+
+        # Filter by age
+        self.data_train = filter_by_age(
+            self.data_train, age_in_days=self.train_max_age * DAYS_IN_YEAR
+        )
+        self.data_val = filter_by_age(self.data_val, age_in_days=self.val_max_age * DAYS_IN_YEAR)
+
+        # Filter by photo quality
+        self.data_train = filter_by_quality(self.data_train, min_quality=self.train_min_quality)
+        self.data_val = filter_by_quality(self.data_val, min_quality=self.val_min_quality)
+
+        # Filter by face orientation
+        if self.train_faceview is not None:
+            self.data_train = filter_by_faceview(self.data_train, faceview_type=self.train_faceview)
+        if self.val_faceview is not None:
+            self.data_val = filter_by_faceview(self.data_val, faceview_type=self.val_faceview)
+
+        self.data_train.reset_index(drop=True, inplace=True)
+        self.data_val.reset_index(drop=True, inplace=True)
+
+    def init_datamodule(self):
+        self.prepare_data()
+
+        log.info("Building training dataset...")
         self.train_dataset = MandrillImageDataset(
             root_dir=self.dataset_images_path,
-            dataframe=self.data,
+            dataframe=self.data_train,
             img_size=self.img_size,
             in_mem=self.in_mem,
             max_days=self.max_days,
-            individuals_ids=self.train_indices,
             training=True,
             normalize_y=self.config.dataset.normalize_y,
         )
@@ -94,7 +123,6 @@ class BasicRegressionPipeline(Pipeline):
             img_size=self.img_size,
             in_mem=False,
             max_days=self.max_days,
-            individuals_ids=self.train_indices,
         )
         self.train_similarity_dataset.set_images(self.train_dataset.images)
 
@@ -103,13 +131,13 @@ class BasicRegressionPipeline(Pipeline):
                 self.train_similarity_dataset
             )
 
+        log.info("Building validation dataset...")
         self.val_dataset = MandrillImageDataset(
             root_dir=self.dataset_images_path,
-            dataframe=self.data,
+            dataframe=self.data_val,
             img_size=self.img_size,
             in_mem=self.in_mem,
             max_days=self.max_days,
-            individuals_ids=self.val_indices,
             normalize_y=self.config.dataset.normalize_y,
         )
 
@@ -402,15 +430,15 @@ class BasicRegressionPipeline(Pipeline):
         # This mean that we set the max age at time 0 to the global max age
         # It is the default behavior
         epoch_step = self.epochs
-        age_step = self.max_age
+        age_step = self.train_max_age
 
         # We increase the max age of both train/val dataset incrementally
         # epoch_step = 10
         # age_step = 0.2
 
         ages_steps = {
-            i * epoch_step: min(self.max_age, (i + 1) * age_step)
-            for i in range(int(self.max_age // age_step) + 1)
+            i * epoch_step: min(self.train_max_age, (i + 1) * age_step)
+            for i in range(int(self.train_max_age // age_step) + 1)
         }
         print(ages_steps)
 

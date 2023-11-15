@@ -13,21 +13,16 @@ from coral_pytorch.layers import CoralLayer
 log = logging.getLogger(__name__)
 
 
-class ConvNext(nn.Module):
-    def __init__(self, name="convnext_xxlarge.clip_laion2b_soup_ft_in1k"):
-        super(ConvNext, self).__init__()
-        log.info(f"Creating ConvNext model type: {name}")
+class HuggingFaceModel(nn.Module):
+    def __init__(self, name):
+        super(HuggingFaceModel, self).__init__()
         self.name = name
-        self.load_model(self.name)
-        self.output_dim = self.backbone.num_features
-        log.info(f"ConvNext feature size : {self.backbone.num_features}")
-
-    def load_model(self, name, path=""):
         self.backbone = timm.create_model(
             name,
             pretrained=False,
-            num_classes=0,  # remove classifier nn.Linear
+            num_classes=0,
         )
+        self.output_dim = self.backbone.num_features
 
     def load_weights(self, path):
         if os.path.exists(path):
@@ -38,6 +33,40 @@ class ConvNext(nn.Module):
                 safetensors.torch.load_file(path, device="cuda")
             except ImportError:
                 log.info("Failed to load safetensors")
+
+
+class EvaNet(HuggingFaceModel):
+    def __init__(self, name=""):
+        log.info(f"Creating Evanet model type: {name}")
+        super(EvaNet, self).__init__(name)
+        self.output_dim = self.backbone.num_features * 577
+
+    def forward(self, x):
+        x = self.backbone.forward_features(x)
+        x = self.backbone.head(x)
+        x = x.view(x.size(0), -1)
+        return x
+
+
+class ResNet(HuggingFaceModel):
+    def __init__(self, name=""):
+        log.info(f"Creating ResNet model type: {name}")
+        super(ResNet, self).__init__(name)
+        self.output_dim = self.backbone.num_features
+
+    def load_weights(self, path):
+        checkpoint = torch.load(path, map_location="cpu")
+        self.backbone.load_state_dict(checkpoint)
+
+    def forward(self, x):
+        return self.backbone(x)
+
+
+class ConvNext(HuggingFaceModel):
+    def __init__(self, name="convnext_xxlarge.clip_laion2b_soup_ft_in1k"):
+        log.info(f"Creating ConvNext model type: {name}")
+        super(ConvNext, self).__init__(name=name)
+        log.info(f"ConvNext feature size : {self.backbone.num_features}")
 
     def forward(self, x):
         x = self.backbone.forward_features(x)

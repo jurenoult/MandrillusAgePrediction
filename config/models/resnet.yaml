@@ -1,0 +1,2 @@
+_target_: mandrillage.models.ResNet
+name: seresnextaa101d_32x8d.sw_in12k_ft_in1k_288

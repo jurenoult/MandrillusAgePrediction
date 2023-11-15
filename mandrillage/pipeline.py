@@ -49,8 +49,15 @@ class Pipeline(object):
 
     def init_parameters(self):
         self.name = self.config.name
-        self.max_age = self.config.dataset.max_age
-        self.max_days = DAYS_IN_YEAR * self.max_age
+
+        self.train_max_age = self.config.dataset.train_max_age
+        self.val_max_age = self.config.dataset.val_max_age
+        self.train_min_quality = self.config.dataset.train_min_quality
+        self.val_min_quality = self.config.dataset.val_min_quality
+        self.train_faceview = self.config.dataset.train_faceview
+        self.val_faceview = self.config.dataset.val_faceview
+
+        self.max_days = DAYS_IN_YEAR * self.train_max_age
         self.max_dob_error = self.config.dataset.max_dob_error
         self.dataset_metadata_path = os.path.join(
             self.config.dataset.basepath, self.config.dataset.metadata

@@ -49,6 +49,14 @@ def filter_by_certainty(data, max_dob_error):
     return data[data["error_dob"] <= max_dob_error]
 
 
+def filter_by_quality(data, min_quality):
+    return data[data["face_qual"] >= min_quality]
+
+
+def filter_by_faceview(data, faceview_type):
+    return data[data["face_view"] == faceview_type]
+
+
 def filter_dob_errors(data):
     return data[data["age"] >= 0]
 
@@ -61,7 +69,6 @@ def read_dataset(
     path,
     filter_dob_error=True,
     filter_certainty=False,
-    max_age=0,
     max_dob_error=0,
     sex=None,
 ):
@@ -96,9 +103,6 @@ def read_dataset(
         data = filter_by_certainty(data, max_dob_error)
     if filter_dob_error:
         data = filter_dob_errors(data)
-
-    if max_age > 0:
-        data = filter_by_age(data, age_in_days=max_age)
 
     data.reset_index(drop=True, inplace=True)
     return data
@@ -256,7 +260,11 @@ class MandrillImageDataset(Dataset):
             from tqdm.contrib.concurrent import process_map
 
             unsorted_images = process_map(
-                self.load_photo_with_id, parameters, max_workers=16, total=len(parameters)
+                self.load_photo_with_id,
+                parameters,
+                max_workers=16,
+                total=len(parameters),
+                chunksize=64,
             )
             # print(unsorted_images)
             sorted_images = sorted(unsorted_images, key=lambda x: x[1], reverse=False)

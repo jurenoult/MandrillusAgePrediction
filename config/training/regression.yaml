@@ -1,6 +1,6 @@
 learning_rate: 0.000001
 batch_size: 256
-epochs: 50
+epochs: 100
 sim_weight: 1.0
 reg_weight: 1.0
 train_backbone: True
