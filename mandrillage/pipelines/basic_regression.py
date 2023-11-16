@@ -47,8 +47,15 @@ class BasicRegressionPipeline(Pipeline):
 
     def make_dataloader(self, dataset, shuffle=False, sampler=None):
         if sampler:
-            return DataLoader(dataset, batch_sampler=sampler, num_workers=16)
-        return DataLoader(dataset, batch_size=self.batch_size, shuffle=shuffle, num_workers=16)
+            return DataLoader(
+                dataset, batch_sampler=sampler, num_workers=self.config.training.max_workers
+            )
+        return DataLoader(
+            dataset,
+            batch_size=self.batch_size,
+            shuffle=shuffle,
+            num_workers=self.config.training.max_workers,
+        )
 
     def prepare_data(self):
         # Read data
@@ -298,7 +305,7 @@ class BasicRegressionPipeline(Pipeline):
                 exp_name=self.name,
                 output_dir=self.output_dir,
             )
-            df.to_csv(os.path.join(self.output_dir, "val_raw_predictions.csv"))
+            df.to_csv(os.path.join(self.output_dir, f"val_raw_predictions_{self.train_index}.csv"))
         else:
             log.info(f"Val loss did not improved from {best_val:.4f}")
         return best_val, improved
