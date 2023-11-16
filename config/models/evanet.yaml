@@ -1,2 +1,2 @@
 _target_: mandrillage.models.EvaNet
-name: eva_giant_patch14_224.clip_ft_in1k
+name: eva_large_patch14_336.in22k_ft_in22k_in1k

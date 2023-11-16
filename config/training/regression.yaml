@@ -8,3 +8,4 @@ use_augmentation: True
 use_similarity_augmentation: False
 backbone_checkpoint: null
 early_stopping_patience: 10
+optimizer: lion
