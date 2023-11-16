@@ -457,8 +457,8 @@ class BasicRegressionPipeline(Pipeline):
                 on_trace_ready=torch.profiler.tensorboard_trace_handler(
                     os.path.join(self.output_dir, "regression_profiler")
                 ),
-                record_shapes=True,
-                with_stack=True,
+                record_shapes=False,
+                with_stack=False,
             )
             prof.start()
 
