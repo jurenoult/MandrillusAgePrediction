@@ -171,7 +171,7 @@ class AugmentedDataset(Dataset):
         image = AUGMENTATION_PIPELINE(image=image)["image"]
         image = np.moveaxis(image, -1, 0)
         image = image.astype(np.float32) / 255
-        return torch.tensor(image)
+        return torch.from_numpy(image)
 
     def __getitem__(self, idx):
         x, y = self.subset[idx]
@@ -372,7 +372,7 @@ class MandrillImageDataset(Dataset):
 
         image = np.moveaxis(image, -1, 0).astype(np.float32)  # Channel first format
 
-        return torch.tensor(image), torch.tensor(target)
+        return torch.from_numpy(image), torch.from_numpy(target)
 
     def _getpair(self, idx):
         # All datas for this mandrill
