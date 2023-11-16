@@ -146,7 +146,9 @@ class Pipeline(object):
         x, y = self.xy_to_device(x, y, device)
         optimizer.zero_grad()
 
-        with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
+        use_dtype = torch.float16 if self.config.training.use_float16 else torch.float32
+
+        with torch.amp.autocast(device_type="cuda", dtype=use_dtype):
             # Forward pass
             y_hat = model(x)
             loss = criterion(y_hat, y)

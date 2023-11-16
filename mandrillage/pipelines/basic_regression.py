@@ -494,12 +494,13 @@ class BasicRegressionPipeline(Pipeline):
 
                 # Scales the loss, and calls backward()
                 # to create scaled gradients
-                scaler.scale(loss).backward()
-
-                scaler.step(self.optimizer)
-
-                # Updates the scale for next iteration
-                scaler.update()
+                if self.config.training.use_float16:
+                    scaler.scale(loss).backward()
+                    scaler.step(self.optimizer)
+                    scaler.update()
+                else:
+                    loss.backward()
+                    self.optimizer.step()
 
                 train_loss += reg_loss.item() * reg_size
 
