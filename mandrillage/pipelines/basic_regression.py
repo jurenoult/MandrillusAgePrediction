@@ -539,6 +539,8 @@ class BasicRegressionPipeline(Pipeline):
 
                 css = self.compute_cumulative_scores(val_df)
 
+            val_losses["MSE"] = val_losses["MSE"] / (DAYS_IN_YEAR**2)
+
             val_loss = val_losses[self.watch_val_loss]
             best_val, improved = self.save_best_val_loss(val_loss, best_val, val_df)
 
