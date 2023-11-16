@@ -264,7 +264,6 @@ class MandrillImageDataset(Dataset):
             unsorted_images = process_map(
                 self.load_photo_with_id,
                 parameters,
-                max_workers=16,
                 total=len(parameters),
                 chunksize=64,
             )
