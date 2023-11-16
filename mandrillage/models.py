@@ -35,6 +35,17 @@ class HuggingFaceModel(nn.Module):
                 log.info("Failed to load safetensors")
 
 
+class EfficientNetV2(HuggingFaceModel):
+    def __init__(self, name):
+        log.info(f"Creating EfficientNetV2 model type: {name}")
+        super().__init__(name)
+        self.output_dim = self.backbone.num_features
+
+    def forward(self, x):
+        x = self.backbone(x)
+        return x
+
+
 class EvaNet(HuggingFaceModel):
     def __init__(self, name=""):
         log.info(f"Creating Evanet model type: {name}")
@@ -205,6 +216,8 @@ class RegressionHead(nn.Module):
             self.activation = None
         self.zero_tensor = torch.tensor(0.0)
 
+        self.norm = nn.LayerNorm(last_feature_size)
+
     def block(self, in_features, out_features):
         lin = nn.Linear(in_features, out_features)
         gelu = nn.GELU()
@@ -219,6 +232,7 @@ class RegressionHead(nn.Module):
     def forward(self, x):
         if self.blocks:
             x = self.blocks(x)
+        x = self.norm(x)
         x = self.linear(x)
 
         if self.output_dim == 1:

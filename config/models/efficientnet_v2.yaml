@@ -1,0 +1,2 @@
+_target_: mandrillage.models.EfficientNetV2
+name: tf_efficientnetv2_l.in21k_ft_in1k
