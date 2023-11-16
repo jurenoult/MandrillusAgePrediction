@@ -451,13 +451,16 @@ class BasicRegressionPipeline(Pipeline):
         }
         print(ages_steps)
 
-        # prof = torch.profiler.profile(
-        #     schedule=torch.profiler.schedule(wait=0, warmup=0, active=1, repeat=1),
-        #     on_trace_ready=torch.profiler.tensorboard_trace_handler("./logs/regression_profiler"),
-        #     record_shapes=False,
-        #     with_stack=False,
-        # )
-        # prof.start()
+        if self.config.profile:
+            prof = torch.profiler.profile(
+                schedule=torch.profiler.schedule(wait=0, warmup=0, active=1, repeat=1),
+                on_trace_ready=torch.profiler.tensorboard_trace_handler(
+                    "./logs/regression_profiler"
+                ),
+                record_shapes=True,
+                with_stack=True,
+            )
+            prof.start()
 
         # Creates once at the beginning of training
         # Scales the gradients
@@ -596,7 +599,8 @@ class BasicRegressionPipeline(Pipeline):
                 output_dir=self.output_dir,
             )
 
-        # prof.stop()
+        if self.config.profile:
+            prof.stop()
         return best_val
 
     def predict_from_dataset(self, x):
