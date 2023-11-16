@@ -229,7 +229,7 @@ class BasicRegressionPipeline(Pipeline):
         if self.config.training.optimizer == "lion":
             self.optimizer = Lion(all_parameters, lr=self.learning_rate, weight_decay=1e-2)
         elif self.config.training.optimizer == "adam":
-            self.optimizer = optim.Adam(all_parameters, lr=self.learning_rate)
+            self.optimizer = optim.AdamW(all_parameters, lr=self.learning_rate, weight_decay=1e-4)
 
     def init_callbacks(self):
         pass
