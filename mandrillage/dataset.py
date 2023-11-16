@@ -164,18 +164,20 @@ class AugmentedDataset(Dataset):
         return self.subset.images
 
     def _augment(self, x):
-        image = x.numpy()
-        if image.dtype == np.float32:
+        # image = x.numpy()
+        image = x
+        if image.dtype == np.float32 or np.float16:
             image = (image * 255).astype(np.uint8)
         image = np.moveaxis(image, 0, -1)
         image = AUGMENTATION_PIPELINE(image=image)["image"]
         image = np.moveaxis(image, -1, 0)
-        image = image.astype(np.float32) / 255
-        return torch.tensor(image)
+        image = image.astype(np.float16) / 255
+        return image
 
     def __getitem__(self, idx):
-        x, y = self.subset[idx]
-        return self._augment(x), y
+        x, y = self.subset._getpair(idx)
+        x = self._augment(x)
+        return torch.tensor(x), torch.tensor(y)
 
     def classes(self):
         return self.subset.classes()
@@ -372,7 +374,7 @@ class MandrillImageDataset(Dataset):
 
         image = np.moveaxis(image, -1, 0).astype(np.float32)  # Channel first format
 
-        return torch.tensor(image), torch.tensor(target)
+        return image, target
 
     def _getpair(self, idx):
         # All datas for this mandrill
@@ -396,7 +398,8 @@ class MandrillImageDataset(Dataset):
         # if self.training:
         #     partition_index = idx % len(self.age_partitions)
         #     idx = random.choice(self.age_partitions[partition_index])
-        return self._getpair(idx)
+        x, y = self._getpair(idx)
+        return torch.tensor(x), torch.tensor(y)
 
     def classes(self):
         return list(self.data_classes.values())
