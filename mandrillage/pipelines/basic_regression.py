@@ -211,6 +211,7 @@ class BasicRegressionPipeline(Pipeline):
 
         self.criterion = train_error_function
         self.val_criterions = {
+            "MSE": torch.nn.MSELoss(),
             "L1": val_error_function,
         }
         self.watch_val_loss = "L1"
@@ -553,6 +554,7 @@ class BasicRegressionPipeline(Pipeline):
                 break
 
             mlflow.log_metric("val_loss", val_loss, step=epoch)
+            mlflow.log_metric("val_loss_mse", val_losses["MSE"], step=epoch)
             mlflow.log_metric("val_loss_std", val_losses["mean_std"], step=epoch)
             mlflow.log_metric("val_loss_std_by_id", val_losses["mean_std_by_id_by_age"], step=epoch)
             mlflow.log_metric("best_val_loss", best_val, step=epoch)
