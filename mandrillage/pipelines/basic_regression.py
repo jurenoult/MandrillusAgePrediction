@@ -458,6 +458,14 @@ class BasicRegressionPipeline(Pipeline):
         # Scales the gradients
         scaler = torch.cuda.amp.GradScaler()
 
+        self.scheduler = None
+        if self.config.training.use_lr_scheduler:
+            self.scheduler = torch.optim.lr_scheduler.CyclicLR(
+                self.optimizer,
+                base_lr=self.config.training.learning_rate * 0.01,
+                max_lr=self.config.training.learning_rate,
+            )
+
         # Training loop
         best_val = np.inf
         pbar = tqdm(range(self.epochs))
@@ -502,6 +510,9 @@ class BasicRegressionPipeline(Pipeline):
                 else:
                     loss.backward()
                     self.optimizer.step()
+
+                if self.scheduler is not None:
+                    self.scheduler.step()
 
                 train_loss += reg_loss.item() * reg_size
 

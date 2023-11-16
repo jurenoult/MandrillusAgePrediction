@@ -11,3 +11,4 @@ early_stopping_patience: 10
 optimizer: lion
 max_workers: 0
 use_float16: True
+use_lr_scheduler: False
