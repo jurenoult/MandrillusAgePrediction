@@ -47,15 +47,8 @@ class BasicRegressionPipeline(Pipeline):
 
     def make_dataloader(self, dataset, shuffle=False, sampler=None):
         if sampler:
-            return DataLoader(
-                dataset,
-                batch_sampler=sampler,
-            )
-        return DataLoader(
-            dataset,
-            batch_size=self.batch_size,
-            shuffle=shuffle,
-        )
+            return DataLoader(dataset, batch_sampler=sampler, num_workers=16)
+        return DataLoader(dataset, batch_size=self.batch_size, shuffle=shuffle, num_workers=16)
 
     def prepare_data(self):
         # Read data
