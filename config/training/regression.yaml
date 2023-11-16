@@ -1,4 +1,4 @@
-learning_rate: 0.000001
+learning_rate: 0.00001
 batch_size: 256
 epochs: 100
 sim_weight: 1.0
