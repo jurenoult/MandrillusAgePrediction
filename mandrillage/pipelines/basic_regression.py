@@ -56,7 +56,7 @@ class BasicRegressionPipeline(Pipeline):
             dataset,
             batch_size=self.batch_size,
             shuffle=shuffle,
-            num_workers=self.config.training.max_workers,
+            num_workers=0 if not is_training else self.config.training.max_workers,
         )
 
     def prepare_data(self):
