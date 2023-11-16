@@ -58,6 +58,7 @@ class Pipeline(object):
         self.val_faceview = self.config.dataset.val_faceview
 
         self.max_days = DAYS_IN_YEAR * self.train_max_age
+        self.days_scale = self.max_days if self.config.dataset.normalize_y else DAYS_IN_YEAR
         self.max_dob_error = self.config.dataset.max_dob_error
         self.dataset_metadata_path = os.path.join(
             self.config.dataset.basepath, self.config.dataset.metadata
@@ -164,8 +165,8 @@ class Pipeline(object):
             outputs = model(images)
 
             # Convert the outputs to numpy arrays
-            pred = outputs.squeeze().detach().cpu().numpy() * self.max_days
-            target = targets.squeeze().cpu().numpy() * self.max_days
+            pred = outputs.squeeze().detach().cpu().numpy() * self.days_scale
+            target = targets.squeeze().cpu().numpy() * self.days_scale
 
             y_true.append(target)
             y_pred.append(pred)

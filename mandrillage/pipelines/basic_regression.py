@@ -669,4 +669,3 @@ class BasicRegressionPipeline(Pipeline):
 
     def init_parameters(self):
         super().init_parameters()
-        self.days_scale = self.max_days if self.config.dataset.normalize_y else DAYS_IN_YEAR
