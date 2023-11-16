@@ -46,17 +46,20 @@ class BasicRegressionPipeline(Pipeline):
         self.sim_model = None
 
     def make_dataloader(self, dataset, shuffle=False, sampler=None, is_training=False):
+        num_workers = 0 if not is_training else self.config.training.max_workers
         if sampler:
             return DataLoader(
                 dataset,
                 batch_sampler=sampler,
-                num_workers=0 if not is_training else self.config.training.max_workers,
+                num_workers=num_workers,
+                pin_memory=True if num_workers > 0 else False,
             )
         return DataLoader(
             dataset,
             batch_size=self.batch_size,
             shuffle=shuffle,
-            num_workers=0 if not is_training else self.config.training.max_workers,
+            num_workers=num_workers,
+            pin_memory=True if num_workers > 0 else False,
         )
 
     def prepare_data(self):
