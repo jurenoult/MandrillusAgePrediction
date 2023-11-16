@@ -64,10 +64,6 @@ class ResNet(HuggingFaceModel):
         super(ResNet, self).__init__(name)
         self.output_dim = self.backbone.num_features
 
-    def load_weights(self, path):
-        checkpoint = torch.load(path, map_location="cpu")
-        self.backbone.load_state_dict(checkpoint)
-
     def forward(self, x):
         return self.backbone(x)
 
