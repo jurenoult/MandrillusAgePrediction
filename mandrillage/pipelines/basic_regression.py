@@ -45,10 +45,12 @@ class BasicRegressionPipeline(Pipeline):
         super(BasicRegressionPipeline, self).__init__()
         self.sim_model = None
 
-    def make_dataloader(self, dataset, shuffle=False, sampler=None):
+    def make_dataloader(self, dataset, shuffle=False, sampler=None, is_training=False):
         if sampler:
             return DataLoader(
-                dataset, batch_sampler=sampler, num_workers=self.config.training.max_workers
+                dataset,
+                batch_sampler=sampler,
+                num_workers=0 if not is_training else self.config.training.max_workers,
             )
         return DataLoader(
             dataset,
@@ -141,14 +143,14 @@ class BasicRegressionPipeline(Pipeline):
             normalize_y=self.config.dataset.normalize_y,
         )
 
-        self.train_loader = self.make_dataloader(self.train_dataset, shuffle=True)
+        self.train_loader = self.make_dataloader(self.train_dataset, shuffle=True, is_training=True)
         self.train_similarity_loader = self.make_dataloader(
             self.train_similarity_dataset, shuffle=True
         )
         self.val_loader = self.make_dataloader(self.val_dataset)
 
     def update_from_ages_steps(self, ages_steps, epoch):
-        if epoch in ages_steps:
+        if epoch in ages_steps and epoch != 0:
             max_age = ages_steps[epoch]
             log.info(f"Setting training max age to {max_age}")
             self.train_dataset.filter_by_age(max_age)
