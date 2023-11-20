@@ -13,6 +13,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from lion_pytorch import Lion
+from Sophia import SophiaG
 
 from mandrillage.dataset import (
     MandrillImageDataset,
@@ -227,15 +228,17 @@ class BasicRegressionPipeline(Pipeline):
             for param in self.backbone.parameters():
                 param.requires_grad = False
 
-        all_parameters = []
-        all_parameters += list(self.model.parameters())
+        parameters = []
+        parameters += list(self.model.parameters())
         if self.sim_model:
-            all_parameters += list(self.sim_model.parameters())
+            parameters += list(self.sim_model.parameters())
 
         if self.config.training.optimizer == "lion":
-            self.optimizer = Lion(all_parameters, lr=self.learning_rate, weight_decay=1e-2)
+            self.optimizer = Lion(parameters, lr=self.learning_rate, weight_decay=1e-2)
         elif self.config.training.optimizer == "adam":
-            self.optimizer = optim.AdamW(all_parameters, lr=self.learning_rate, weight_decay=1e-4)
+            self.optimizer = optim.AdamW(parameters, lr=self.learning_rate, weight_decay=1e-2)
+        elif self.config.training.optimizer == "sophia":
+            self.optimizer = SophiaG(parameters, lr=self.learning_rate, weight_decay=1e-2)
 
     def init_callbacks(self):
         pass
