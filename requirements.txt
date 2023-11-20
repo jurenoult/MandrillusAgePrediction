@@ -17,3 +17,4 @@ torchfile
 einops
 xformers
 lion-pytorch
+Sophia-Optimizer
