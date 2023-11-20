@@ -13,7 +13,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from lion_pytorch import Lion
-from Sophia import SophiaG
+
+# from Sophia import SophiaG
 
 from mandrillage.dataset import (
     MandrillImageDataset,
@@ -237,8 +238,8 @@ class BasicRegressionPipeline(Pipeline):
             self.optimizer = Lion(parameters, lr=self.learning_rate, weight_decay=1e-2)
         elif self.config.training.optimizer == "adam":
             self.optimizer = optim.AdamW(parameters, lr=self.learning_rate, weight_decay=1e-2)
-        elif self.config.training.optimizer == "sophia":
-            self.optimizer = SophiaG(parameters, lr=self.learning_rate, weight_decay=1e-2)
+        # elif self.config.training.optimizer == "sophia":
+        #     self.optimizer = SophiaG(parameters, lr=self.learning_rate, weight_decay=1e-2)
 
     def init_callbacks(self):
         pass
