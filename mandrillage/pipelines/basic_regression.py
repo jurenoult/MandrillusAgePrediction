@@ -476,6 +476,7 @@ class BasicRegressionPipeline(Pipeline):
                 self.optimizer,
                 base_lr=self.config.training.learning_rate * 0.01,
                 max_lr=self.config.training.learning_rate,
+                cycle_momentum=False,
             )
 
         # Training loop
