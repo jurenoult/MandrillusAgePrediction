@@ -325,8 +325,8 @@ class MandrillImageDataset(Dataset):
 
         # Normalization
         if normalize:
-            # image = image.astype(np.float32) / 255.0
-            image = (image - image.min()) / image.ptp()
+            image = image.astype(np.float32) / 255.0
+            # image = (image - image.min()) / image.ptp()
 
         return image.astype(np.float16)
 
