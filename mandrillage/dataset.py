@@ -171,7 +171,7 @@ class AugmentedDataset(Dataset):
         image = np.moveaxis(image, 0, -1)
         image = AUGMENTATION_PIPELINE(image=image)["image"]
         image = np.moveaxis(image, -1, 0)
-        image = image.astype(np.float16) / 255
+        image = image.astype(np.float32) / 255
         return image
 
     def __getitem__(self, idx):
