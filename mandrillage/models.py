@@ -183,7 +183,14 @@ class CoralModel(torch.nn.Module):
 
 class RegressionHead(nn.Module):
     def __init__(
-        self, input_dim=1, output_dim=1, lin_start=2048, n_lin=6, sigmoid=True, dropout=0.0
+        self,
+        input_dim=1,
+        output_dim=1,
+        lin_start=2048,
+        n_lin=6,
+        sigmoid=True,
+        dropout=0.0,
+        use_norm=False,
     ):
         super(RegressionHead, self).__init__()
 
@@ -207,7 +214,7 @@ class RegressionHead(nn.Module):
             self.activation = None
         self.zero_tensor = torch.tensor(0.0)
 
-        self.norm = nn.LayerNorm(last_feature_size)
+        self.norm = nn.LayerNorm(last_feature_size) if use_norm else nn.Identity()
 
         self.dropout = nn.Dropout(p=dropout)
 

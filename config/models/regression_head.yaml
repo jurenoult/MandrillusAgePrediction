@@ -8,3 +8,4 @@ input_dim: 1
 output_dim: 1
 sigmoid: False
 dropout: 0.0
+use_norm: False
