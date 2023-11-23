@@ -75,9 +75,8 @@ class ConvNext(HuggingFaceModel):
         log.info(f"ConvNext feature size : {self.backbone.num_features}")
 
     def forward(self, x):
-        x = self.backbone(x)
-        # x = self.backbone.forward_features(x)
-        # x = self.backbone.head(x)
+        x = self.backbone.forward_features(x)
+        x = self.backbone.forward_head(x, pre_logits=True)
         return x
 
 
