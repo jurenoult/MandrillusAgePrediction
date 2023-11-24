@@ -34,7 +34,7 @@ hydra:
     sampler:
       _target_: optuna.samplers.TPESampler
       seed: 12345
-      n_startup_trials: 5 # number of random sampling runs before optimization starts
+      n_startup_trials: 1 # number of random sampling runs before optimization starts
 
       # define range of hyperparameters
     params:
