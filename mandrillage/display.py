@@ -23,12 +23,12 @@ def display_predictions(
     data = sorted(data, key=lambda x: x[0], reverse=True)
     ys, std, means = zip(*data)
 
-    plt.plot(ys, means)
+    # plt.plot(ys, means)
 
-    std = np.array(std)
-    means = np.array(means)
+    # std = np.array(std)
+    # means = np.array(means)
 
-    plt.fill_between(ys, means - std, means + std)
+    # plt.fill_between(ys, means - std, means + std)
 
     for y, values in predictions.items():
         size = len(values)

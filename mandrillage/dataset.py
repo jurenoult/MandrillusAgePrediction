@@ -104,6 +104,9 @@ def read_dataset(
     if filter_dob_error:
         data = filter_dob_errors(data)
 
+    print(f"Min age = {data['age'].min()}")
+    print(f"Max age = {data['age'].max()}")
+
     data.reset_index(drop=True, inplace=True)
     return data
 

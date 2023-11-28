@@ -181,6 +181,70 @@ class CoralModel(torch.nn.Module):
         return logits, probas
 
 
+class DINOHead(nn.Module):
+    """Taken from: https://github.com/facebookresearch/dinov2/blob/main/dinov2/layers/dino_head.py"""
+
+    def __init__(
+        self,
+        input_dim,
+        output_dim,
+        use_bn=False,
+        nlayers=3,
+        hidden_dim=2048,
+        bottleneck_dim=256,
+        mlp_bias=True,
+    ):
+        super().__init__()
+        nlayers = max(nlayers, 1)
+        self.mlp = _build_mlp(
+            nlayers, input_dim, bottleneck_dim, hidden_dim=hidden_dim, use_bn=use_bn, bias=mlp_bias
+        )
+        self.apply(self._init_weights)
+        self.last_layer = nn.utils.weight_norm(nn.Linear(bottleneck_dim, output_dim, bias=False))
+        self.last_layer.weight_g.data.fill_(1)
+        self.zero_tensor = torch.tensor(0.0)
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            nn.init.trunc_normal_(m.weight, std=0.02)
+            if isinstance(m, nn.Linear) and m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+
+    def forward(self, x):
+        x = self.mlp(x)
+        eps = 1e-6 if x.dtype == torch.float16 else 1e-12
+        x = nn.functional.normalize(x, dim=-1, p=2, eps=eps)
+        x = self.last_layer(x)
+
+        if self.output_dim == 1:
+            x = torch.reshape(x, (x.shape[0],))
+
+        # Post processing to have only positive values
+        if not self.training:
+            x = torch.max(self.zero_tensor, x)
+
+        return x
+
+
+def _build_mlp(nlayers, in_dim, bottleneck_dim, hidden_dim=None, use_bn=False, bias=True):
+    if nlayers == 1:
+        return nn.Linear(in_dim, bottleneck_dim, bias=bias)
+    else:
+        layers = [nn.Linear(in_dim, hidden_dim, bias=bias)]
+        if use_bn:
+            layers.append(nn.BatchNorm1d(hidden_dim))
+        layers.append(nn.GELU())
+        for _ in range(nlayers - 2):
+            layers.append(nn.Linear(hidden_dim, hidden_dim, bias=bias))
+            if use_bn:
+                layers.append(nn.BatchNorm1d(hidden_dim))
+            layers.append(nn.GELU())
+        layers.append(nn.Linear(hidden_dim, bottleneck_dim, bias=bias))
+        return nn.Sequential(*layers)
+
+
 class RegressionHead(nn.Module):
     def __init__(
         self,
@@ -223,11 +287,11 @@ class RegressionHead(nn.Module):
         gelu = nn.GELU()
         return nn.Sequential(lin, gelu)
 
-    # def _init_weights(self, m):
-    #     if isinstance(m, nn.Linear):
-    #         trunc_normal_(m.weight, std=0.02)
-    #         if isinstance(m, nn.Linear) and m.bias is not None:
-    #             nn.init.constant_(m.bias, 0)
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            nn.init.trunc_normal_(m.weight, std=0.02)
+            if isinstance(m, nn.Linear) and m.bias is not None:
+                nn.init.constant_(m.bias, 0)
 
     def forward(self, x):
         if self.blocks:
