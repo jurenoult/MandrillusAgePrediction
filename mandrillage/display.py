@@ -7,28 +7,38 @@ from tqdm import tqdm
 import numpy as np
 
 
-def display_predictions(
-    predictions, std_by_value, mean_by_value, output_path="regression_performance"
-):
-    # Create a figure with margin function
+def display_worst_regression_cases(self, df, dataset, max_n, epoch):
+    n = min(max_n, len(df))
+
+    # Make directories
+    worst_cases_dir = os.path.join(self.output_dir, f"worst_{n}_cases")
+    os.makedirs(worst_cases_dir, exist_ok=True)
+    epoch_worst_cases_dir = os.path.join(worst_cases_dir, f"{epoch}")
+    os.makedirs(epoch_worst_cases_dir, exist_ok=True)
+
+    sorted_df = df.sort_values("error", ascending=False)
+
+    for i in range(n):
+        row = sorted_df.iloc[[i]]
+        real_index = row.index.values[0]
+        photo_id = row["photo_path"].values[0]
+
+        x, y = dataset[real_index]
+        y_pred = row["y_pred"].values[0]
+        y = np.round(y * self.days_scale)
+
+        plt.imshow(x.permute(1, 2, 0))
+        plt.title(f"Predicted: {y_pred}, Real: {y}, Error: {abs(y - y_pred)}")
+        plt.savefig(os.path.join(epoch_worst_cases_dir, f"{i}_{photo_id}.png"))
+        plt.close()
+
+
+def display_predictions(predictions, output_path="regression_performance"):
     fig = plt.figure(figsize=(16, 10))
     ys = list(predictions.keys())
-    std = list(std_by_value.values())
-    means = list(mean_by_value.values())
-
     y_max = np.max(ys)
+
     plt.plot([0, y_max], [0, y_max])
-
-    data = zip(ys, std, means)
-    data = sorted(data, key=lambda x: x[0], reverse=True)
-    ys, std, means = zip(*data)
-
-    # plt.plot(ys, means)
-
-    # std = np.array(std)
-    # means = np.array(means)
-
-    # plt.fill_between(ys, means - std, means + std)
 
     for y, values in predictions.items():
         size = len(values)

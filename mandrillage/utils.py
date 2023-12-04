@@ -1,5 +1,6 @@
 import logging
 import os
+import json
 
 import numpy as np
 import torch
@@ -13,6 +14,18 @@ def get_logger(name=__name__) -> logging.Logger:
 
 
 log = get_logger(__name__)
+
+
+class NumpyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return json.JSONEncoder.default(self, obj)
+
+
+def write_results(path, results):
+    with open(path, "w") as file:
+        file.write(json.dumps(results, cls=NumpyEncoder))
 
 
 def create_kfold_data(dataset, k, fold_index):

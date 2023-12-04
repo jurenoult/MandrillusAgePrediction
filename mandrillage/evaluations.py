@@ -1,10 +1,90 @@
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
-from sklearn.metrics import confusion_matrix
-import matplotlib.pyplot as plt
-import seaborn as sns
-import numpy as np
+import os
 
+import matplotlib.pyplot as plt
+import numpy as np
+import seaborn as sns
+from sklearn.metrics import (
+    accuracy_score,
+    confusion_matrix,
+    f1_score,
+    precision_score,
+    recall_score,
+)
+from tqdm import tqdm
+
+from mandrillage.display import display_predictions
 from mandrillage.utils import DAYS_IN_YEAR
+
+
+def compute_std(df, output_dir, display_name="val"):
+    predicted_error = {}
+    predictions = {}
+
+    # Gather data per id per age range
+    for i in tqdm(range(len(df))):
+        row = df.iloc[[i]]
+        y_true = row["y_true"].values[0]
+        y_pred = row["y_pred"].values[0]
+        if y_true not in predicted_error:
+            predicted_error[y_true] = {}
+        id_ = row["id"].values[0]
+        if id_ not in predicted_error[y_true]:
+            predicted_error[y_true][id_] = []
+
+        abs_error = abs(y_true - y_pred)
+        predicted_error[y_true][id_].append(abs_error)
+
+        if y_true not in predictions:
+            predictions[y_true] = []
+        predictions[y_true].append(y_pred)
+
+    # Compute mean per id per age when multiple photo occurs
+    std_by_value = {}
+    std_by_value_by_id = {}
+    mean_by_value = {}
+    # For each unique age value
+    for age in predicted_error.keys():
+        age_data = predicted_error[age]
+        age_pred = predictions[age]
+
+        # Compute std per id with nb photo > 1
+        age_stds_by_id = []
+        for id_ in age_data.keys():
+            if len(age_data[id_]) > 1:
+                current_std = np.std(np.array(age_data[id_]))
+                age_stds_by_id.append(current_std)
+        age_std_by_id = np.mean(age_stds_by_id)
+        if not np.isnan(age_std_by_id):
+            std_by_value_by_id[age] = age_std_by_id
+
+        # Compute std by age globally
+        std_by_value[age] = np.std(np.array(age_pred))
+        mean_by_value[age] = np.mean(np.array(age_pred))
+
+    display_predictions(
+        predictions,
+        os.path.join(output_dir, f"latest_{display_name}_performance"),
+    )
+
+    return std_by_value, std_by_value_by_id
+
+
+def compute_cumulative_scores(df):
+    y_pred = np.array(list(df["y_pred"]))
+    y_true = np.array(list(df["y_true"]))
+
+    error = abs(y_pred - y_true)
+    nb_values = len(y_true)
+
+    cs_values_in_years = [1 / 12, 1 / 6, 1 / 4, 1 / 3, 1 / 2, 1, 2, 3]
+    cs_values_in_days = [np.round(val * DAYS_IN_YEAR) for val in cs_values_in_years]
+
+    css = {}
+    for i, max_error in enumerate(cs_values_in_days):
+        nb_correct = sum(error <= max_error)
+        cs = float(nb_correct) / float(nb_values)
+        css[f"{i}_CS_{max_error}"] = cs
+    return css
 
 
 def standard_regression_evaluation(y_true, y_pred, name, min_range, max_range):

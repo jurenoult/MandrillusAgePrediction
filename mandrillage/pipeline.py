@@ -161,39 +161,6 @@ class Pipeline(object):
 
         return loss, size
 
-    def collect(self, loader, model, device, max_display=0):
-        y_true = []
-        y_pred = []
-
-        # Perform inference on validation images
-        for i, (images, targets) in enumerate(loader):
-            # Forward pass
-            images = images.to(device)
-            outputs = model(images)
-
-            # Convert the outputs to numpy arrays
-            pred = outputs.squeeze().detach().cpu().numpy() * self.days_scale
-            target = targets.squeeze().cpu().numpy() * self.days_scale
-
-            y_true.append(target)
-            y_pred.append(pred)
-
-            if i >= max_display:
-                continue
-
-            # Display the results
-            print("Predicted Values:", pred)
-            print("Actual Values:", target)
-            print("Prediction Error: ", pred - target)
-            print()  # Add an empty line for separation
-
-            # Visualize the images and predictions
-            plt.imshow(images.squeeze().cpu().permute(1, 2, 0))
-            plt.title(f"Predicted: {pred}, Actual: {target}, Error: {abs(target-pred)}")
-            plt.show()
-
-        return y_true, y_pred
-
     def test(self):
         raise ValueError("You must subclass self.test() method")
 

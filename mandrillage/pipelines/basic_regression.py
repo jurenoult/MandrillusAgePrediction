@@ -14,8 +14,6 @@ import matplotlib.pyplot as plt
 
 from lion_pytorch import Lion
 
-# from Sophia import SophiaG
-
 from mandrillage.dataset import (
     MandrillImageDataset,
     read_dataset,
@@ -26,20 +24,24 @@ from mandrillage.dataset import (
     filter_by_quality,
     filter_by_faceview,
 )
-from mandrillage.evaluations import standard_regression_evaluation
+from mandrillage.evaluations import (
+    standard_regression_evaluation,
+    compute_cumulative_scores,
+    compute_std,
+)
 from mandrillage.models import SequentialModel
 from mandrillage.pipeline import Pipeline
-from mandrillage.display import display_predictions
-from mandrillage.utils import load, save, split_indices, create_kfold_data, DAYS_IN_YEAR
+from mandrillage.display import display_worst_regression_cases
+from mandrillage.utils import (
+    load,
+    save,
+    split_indices,
+    create_kfold_data,
+    DAYS_IN_YEAR,
+    write_results,
+)
 
 log = logging.getLogger(__name__)
-
-
-class NumpyEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, np.ndarray):
-            return obj.tolist()
-        return json.JSONEncoder.default(self, obj)
 
 
 class BasicRegressionPipeline(Pipeline):
@@ -194,8 +196,6 @@ class BasicRegressionPipeline(Pipeline):
 
         self.config.regression_head.input_dim = self.backbone.output_dim
         self.regression_head = hydra.utils.instantiate(self.config.regression_head)
-        print(self.regression_head)
-
         self.model = SequentialModel(backbone=self.backbone, head=self.regression_head)
 
         if self.config.similarity_head:
@@ -238,68 +238,12 @@ class BasicRegressionPipeline(Pipeline):
             self.optimizer = Lion(parameters, lr=self.learning_rate, weight_decay=1e-2)
         elif self.config.training.optimizer == "adam":
             self.optimizer = optim.AdamW(parameters, lr=self.learning_rate, weight_decay=1e-2)
-        # elif self.config.training.optimizer == "sophia":
-        #     self.optimizer = SophiaG(parameters, lr=self.learning_rate, weight_decay=1e-2)
 
     def init_callbacks(self):
         pass
 
     def init_loggers(self):
         pass
-
-    def compute_std(self, df, display_name="val"):
-        predicted_error = {}
-        predictions = {}
-
-        # Gather data per id per age range
-        for i in tqdm(range(len(df))):
-            row = df.iloc[[i]]
-            y_true = row["y_true"].values[0]
-            y_pred = row["y_pred"].values[0]
-            if y_true not in predicted_error:
-                predicted_error[y_true] = {}
-            id_ = row["id"].values[0]
-            if id_ not in predicted_error[y_true]:
-                predicted_error[y_true][id_] = []
-
-            abs_error = abs(y_true - y_pred)
-            predicted_error[y_true][id_].append(abs_error)
-
-            if y_true not in predictions:
-                predictions[y_true] = []
-            predictions[y_true].append(y_pred)
-
-        # Compute mean per id per age when multiple photo occurs
-        std_by_value = {}
-        std_by_value_by_id = {}
-        mean_by_value = {}
-        # For each unique age value
-        for age in predicted_error.keys():
-            age_data = predicted_error[age]
-            age_pred = predictions[age]
-
-            # Compute std per id with nb photo > 1
-            age_stds_by_id = []
-            for id_ in age_data.keys():
-                if len(age_data[id_]) > 1:
-                    current_std = np.std(np.array(age_data[id_]))
-                    age_stds_by_id.append(current_std)
-            age_std_by_id = np.mean(age_stds_by_id)
-            if not np.isnan(age_std_by_id):
-                std_by_value_by_id[age] = age_std_by_id
-
-            # Compute std by age globally
-            std_by_value[age] = np.std(np.array(age_pred))
-            mean_by_value[age] = np.mean(np.array(age_pred))
-
-        fig = display_predictions(
-            predictions,
-            std_by_value,
-            mean_by_value,
-            os.path.join(self.output_dir, f"latest_{display_name}_performance"),
-        )
-
-        return std_by_value, std_by_value_by_id
 
     def save_best_val_loss(self, val_loss, best_val, df):
         improved = False
@@ -387,48 +331,6 @@ class BasicRegressionPipeline(Pipeline):
         y_pred = torch.unsqueeze(y_pred, axis=-1)
         return loss(y_pred, y_true)
 
-    def display_n_worst_cases(self, df, dataset, max_n, epoch):
-        n = min(max_n, len(df))
-
-        # Make directories
-        worst_cases_dir = os.path.join(self.output_dir, f"worst_{n}_cases")
-        os.makedirs(worst_cases_dir, exist_ok=True)
-        epoch_worst_cases_dir = os.path.join(worst_cases_dir, f"{epoch}")
-        os.makedirs(epoch_worst_cases_dir, exist_ok=True)
-
-        sorted_df = df.sort_values("error", ascending=False)
-
-        for i in range(n):
-            row = sorted_df.iloc[[i]]
-            real_index = row.index.values[0]
-            photo_id = row["photo_path"].values[0]
-
-            x, y = dataset[real_index]
-            y_pred = row["y_pred"].values[0]
-            y = np.round(y * self.days_scale)
-
-            plt.imshow(x.permute(1, 2, 0))
-            plt.title(f"Predicted: {y_pred}, Real: {y}, Error: {abs(y - y_pred)}")
-            plt.savefig(os.path.join(epoch_worst_cases_dir, f"{i}_{photo_id}.png"))
-            plt.close()
-
-    def compute_cumulative_scores(self, df):
-        y_pred = np.array(list(df["y_pred"]))
-        y_true = np.array(list(df["y_true"]))
-
-        error = abs(y_pred - y_true)
-        nb_values = len(y_true)
-
-        cs_values_in_years = [1 / 12, 1 / 6, 1 / 4, 1 / 3, 1 / 2, 1, 2, 3]
-        cs_values_in_days = [np.round(val * DAYS_IN_YEAR) for val in cs_values_in_years]
-
-        css = {}
-        for i, max_error in enumerate(cs_values_in_days):
-            nb_correct = sum(error <= max_error)
-            cs = float(nb_correct) / float(nb_values)
-            css[f"{i}_CS_{max_error}"] = cs
-        return css
-
     def train(self):
         if self.resume:
             self.model = load(
@@ -467,7 +369,7 @@ class BasicRegressionPipeline(Pipeline):
             prof.start()
 
         # Creates once at the beginning of training
-        # Scales the gradients
+        # Scales the gradients if using fp16
         scaler = torch.cuda.amp.GradScaler()
 
         self.scheduler = None
@@ -551,17 +453,15 @@ class BasicRegressionPipeline(Pipeline):
                 for val_name, val_fnct in self.val_criterions.items():
                     val_losses[val_name] = self.val_loss_from_df(val_df, val_fnct)
 
+                std_by_age, std_by_age_by_id = compute_std(val_df, self.output_dir)
                 # Add mean std
-                std_by_age, std_by_age_by_id = self.compute_std(val_df)
                 val_losses["mean_std"] = np.mean(list(std_by_age.values()))
-                # mlflow.log_figure(fig, "mean_std")
-
                 # Add mean std per id per age
                 val_losses["mean_std_by_id_by_age"] = np.mean(list(std_by_age_by_id.values()))
 
-                self.display_n_worst_cases(val_df, self.val_dataset, max_n=10, epoch=epoch)
+                display_worst_regression_cases(val_df, self.val_dataset, max_n=10, epoch=epoch)
 
-                css = self.compute_cumulative_scores(val_df)
+                css = compute_cumulative_scores(val_df)
 
             val_losses["MSE"] = val_losses["MSE"] / (DAYS_IN_YEAR**2)
 
@@ -669,6 +569,7 @@ class BasicRegressionPipeline(Pipeline):
             plt.close()
 
     def test(self, max_display=0):
+        # Load
         self.model = load(
             self.model,
             f"regression_{self.train_index}",
@@ -677,20 +578,16 @@ class BasicRegressionPipeline(Pipeline):
         )
         self.model.eval()
 
-        self.val_loader = DataLoader(self.val_dataset, batch_size=1, shuffle=False)
-        y_true, y_pred = self.collect(
-            self.val_loader, self.model, self.device, max_display=max_display
-        )
+        data = self.collect_data(self.val_dataset, self.model)
+        y_true = data["y_true"]
+        y_pred = data["y_pred"]
 
         results = standard_regression_evaluation(
             np.array(y_true), np.array(y_pred), self.name, 0, self.max_days
         )
 
         scores_path = os.path.join(self.output_dir, f"scores_{self.train_index}.json")
-        with open(scores_path, "w") as file:
-            import json
-
-            file.write(json.dumps(results, cls=NumpyEncoder))
+        write_results(scores_path, results)
 
         # log.info("Performing inference per individual")
         # self.predict_per_individual(self.val_dataset)
