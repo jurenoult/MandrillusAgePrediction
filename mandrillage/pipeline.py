@@ -146,7 +146,6 @@ class Pipeline(object):
     def basic_train_step(self, loader, optimizer, model, criterion, device):
         x, y = next(iter(loader))
         x, y = self.xy_to_device(x, y, device)
-        optimizer.zero_grad()
 
         if self.config.training.use_float16:
             with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
@@ -251,6 +250,7 @@ class Pipeline(object):
         else:
             loss.backward()
             self.optimizer.step()
+        self.optimizer.zero_grad()
 
     def save_best_val_loss(self, val_loss, best_val, df):
         improved = False

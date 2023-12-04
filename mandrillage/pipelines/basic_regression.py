@@ -32,7 +32,6 @@ from mandrillage.pipeline import Pipeline
 from mandrillage.display import display_worst_regression_cases
 from mandrillage.utils import (
     load,
-    save,
     split_indices,
     create_kfold_data,
     DAYS_IN_YEAR,
@@ -126,10 +125,12 @@ class BasicRegressionPipeline(Pipeline):
 
         self.train_similarity_dataset = MandrillSimilarityImageDataset(
             root_dir=self.dataset_images_path,
-            dataframe=self.data,
+            dataframe=self.data_train,
             img_size=self.img_size,
             in_mem=False,
             max_days=self.max_days,
+            training=True,
+            normalize_y=self.config.dataset.normalize_y,
         )
         self.train_similarity_dataset.set_images(self.train_dataset.images)
 
@@ -245,7 +246,8 @@ class BasicRegressionPipeline(Pipeline):
             )
         )
         y = y.to(self.device)
-        x1, x2 = self.xy_to_device(x1, x2, self.device)
+        x1 = x1.to(self.device)
+        x2 = x2.to(self.device)
         y_pred = self.sim_model((x1, x2))
         sim_loss = self.sim_criterion(y_pred, y)
         return sim_loss

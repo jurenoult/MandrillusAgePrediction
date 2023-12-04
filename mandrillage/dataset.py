@@ -417,9 +417,20 @@ class MandrillSimilarityImageDataset(MandrillImageDataset):
         max_days=1,
         similarity_threshold=None,
         individuals_ids=[],
+        max_nbins=12,
+        training=False,
+        normalize_y=True,
     ):
         super(MandrillSimilarityImageDataset, self).__init__(
-            root_dir, dataframe, img_size, in_mem, max_days, individuals_ids
+            root_dir,
+            dataframe,
+            img_size,
+            in_mem,
+            max_days,
+            individuals_ids,
+            max_nbins,
+            training,
+            normalize_y,
         )
         self.ids = individuals_ids
 
