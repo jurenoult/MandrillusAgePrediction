@@ -80,16 +80,6 @@ class ConvNext(HuggingFaceModel):
         return x
 
 
-class boundReLU(nn.Module):
-    def __init__(self, min_value, max_value):
-        super(boundReLU, self).__init__()
-        self.min_value = torch.tensor(min_value)
-        self.max_value = torch.tensor(max_value)
-
-    def forward(self, x):
-        return torch.min(torch.max(self.min_value, x), self.max_value)
-
-
 class SequentialModel(nn.Module):
     def __init__(self, backbone, head):
         super(SequentialModel, self).__init__()
@@ -274,7 +264,6 @@ class RegressionHead(nn.Module):
         if sigmoid:
             self.activation = nn.Sigmoid()
         else:
-            # self.activation = boundReLU(min_value=0, max_value=2.0)
             self.activation = None
         self.zero_tensor = torch.tensor(0.0)
 
