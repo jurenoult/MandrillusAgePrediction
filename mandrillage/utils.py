@@ -81,7 +81,7 @@ def save(model, prefix, exp_name, output_dir):
     os.makedirs(save_dir, exist_ok=True)
 
     path = os.path.join(save_dir, f"{prefix}_{exp_name}.h5")
-    torch.save(model.state_dict(), path)
+    torch.save(model, path)
 
 
 def load(model, prefix, exp_name, output_dir):
