@@ -190,8 +190,9 @@ class DINOHead(nn.Module):
             nlayers, input_dim, bottleneck_dim, hidden_dim=hidden_dim, use_bn=use_bn, bias=mlp_bias
         )
         self.apply(self._init_weights)
-        self.last_layer = nn.utils.weight_norm(nn.Linear(bottleneck_dim, output_dim, bias=False))
-        self.last_layer.weight_g.data.fill_(1)
+        # self.last_layer = nn.utils.weight_norm(nn.Linear(bottleneck_dim, output_dim, bias=True))
+        self.last_layer = nn.Linear(bottleneck_dim, output_dim, bias=True)
+        # self.last_layer.weight_g.data.fill_(1)
         self.zero_tensor = torch.tensor(0.0)
         self.input_dim = input_dim
         self.output_dim = output_dim
@@ -204,8 +205,8 @@ class DINOHead(nn.Module):
 
     def forward(self, x):
         x = self.mlp(x)
-        eps = 1e-6 if x.dtype == torch.float16 else 1e-12
-        x = nn.functional.normalize(x, dim=-1, p=2, eps=eps)
+        # eps = 1e-6 if x.dtype == torch.float16 else 1e-12
+        # x = nn.functional.normalize(x, dim=-1, p=2, eps=eps)
         x = self.last_layer(x)
 
         if self.output_dim == 1:

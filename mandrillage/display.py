@@ -7,11 +7,11 @@ from tqdm import tqdm
 import numpy as np
 
 
-def display_worst_regression_cases(self, df, dataset, max_n, epoch):
+def display_worst_regression_cases(df, dataset, days_scale, output_dir, max_n, epoch):
     n = min(max_n, len(df))
 
     # Make directories
-    worst_cases_dir = os.path.join(self.output_dir, f"worst_{n}_cases")
+    worst_cases_dir = os.path.join(output_dir, f"worst_{n}_cases")
     os.makedirs(worst_cases_dir, exist_ok=True)
     epoch_worst_cases_dir = os.path.join(worst_cases_dir, f"{epoch}")
     os.makedirs(epoch_worst_cases_dir, exist_ok=True)
@@ -25,7 +25,7 @@ def display_worst_regression_cases(self, df, dataset, max_n, epoch):
 
         x, y = dataset[real_index]
         y_pred = row["y_pred"].values[0]
-        y = np.round(y * self.days_scale)
+        y = np.round(y * days_scale)
 
         plt.imshow(x.permute(1, 2, 0))
         plt.title(f"Predicted: {y_pred}, Real: {y}, Error: {abs(y - y_pred)}")

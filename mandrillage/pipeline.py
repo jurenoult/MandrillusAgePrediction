@@ -1,7 +1,6 @@
 import logging
 import os
 
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from omegaconf import OmegaConf
@@ -11,6 +10,7 @@ import mlflow
 log = logging.getLogger(__name__)
 
 from mandrillage.utils import DAYS_IN_YEAR
+from mandrillage.utils import load, save
 
 
 class Pipeline(object):
@@ -111,7 +111,7 @@ class Pipeline(object):
     def train(self):
         raise ValueError("You must subclass self.train() method")
 
-    def val_loss(self, loader, model, criterion, device, repeat=1, display_worst_error=False):
+    def val_loss(self, loader, model, criterion, device, repeat=1):
         total_val_loss = 0.0
 
         for i in range(repeat):
@@ -143,7 +143,7 @@ class Pipeline(object):
             size = x.size(0)
         return size
 
-    def train_step(self, loader, optimizer, model, criterion, device):
+    def basic_train_step(self, loader, optimizer, model, criterion, device):
         x, y = next(iter(loader))
         x, y = self.xy_to_device(x, y, device)
         optimizer.zero_grad()
@@ -157,9 +157,7 @@ class Pipeline(object):
             y_hat = model(x)
             loss = criterion(y_hat, y)
 
-        size = self.get_size(x)
-
-        return loss, size
+        return loss
 
     def test(self):
         raise ValueError("You must subclass self.test() method")
@@ -224,3 +222,160 @@ class Pipeline(object):
         mlflow.end_run()
 
         return self.score
+
+    def setup_age_steps(self):
+        # Age steps with number of epochs
+        # This mean that we set the max age at time 0 to the global max age
+        # It is the default behavior
+        epoch_step = self.epochs
+        age_step = self.train_max_age
+
+        # We increase the max age of both train/val dataset incrementally
+        # epoch_step = 10
+        # age_step = 0.2
+
+        age_steps = {
+            i * epoch_step: min(self.train_max_age, (i + 1) * age_step)
+            for i in range(int(self.train_max_age // age_step) + 1)
+        }
+        return age_steps
+
+    def train_mode():
+        raise NotImplementedError()
+
+    def optimize(self, loss, scaler):
+        if self.config.training.use_float16:
+            scaler.scale(loss).backward()
+            scaler.step(self.optimizer)
+            scaler.update()
+        else:
+            loss.backward()
+            self.optimizer.step()
+
+    def save_best_val_loss(self, val_loss, best_val, df):
+        improved = False
+        if val_loss < best_val:
+            improved = True
+            log.info(
+                f"Val loss {self.watch_val_loss} improved from {best_val:.4f} to {val_loss:.4f}"
+            )
+            best_val = val_loss
+            save(
+                self.model,
+                f"regression_{self.train_index}",
+                exp_name=self.name,
+                output_dir=self.output_dir,
+            )
+            df.to_csv(os.path.join(self.output_dir, f"val_raw_predictions_{self.train_index}.csv"))
+        else:
+            log.info(f"Val loss did not improved from {best_val:.4f}")
+        return best_val, improved
+
+    def early_stopping(self, improved):
+        if not improved:
+            self.improved_since += 1
+        else:
+            self.improved_since = 0
+        if self.improved_since >= self.early_stopping_patience:
+            log.info(
+                f"Stopping training since validation loss did not improved for {self.early_stopping_patience} epochs"
+            )
+            return True
+        return False
+
+    def train(self):
+        if self.resume:
+            self.model = load(
+                self.model,
+                f"regression_{self.train_index}",
+                exp_name=self.name,
+                output_dir=self.output_dir,
+            )
+
+        age_steps = self.setup_age_steps()
+        print(age_steps)
+
+        if self.config.profile:
+            prof = torch.profiler.profile(
+                schedule=torch.profiler.schedule(wait=0, warmup=0, active=1, repeat=1),
+                on_trace_ready=torch.profiler.tensorboard_trace_handler(
+                    os.path.join(self.output_dir, "profiler")
+                ),
+                record_shapes=False,
+                with_stack=False,
+            )
+            prof.start()
+
+        scaler = torch.cuda.amp.GradScaler()
+
+        self.scheduler = None
+        if self.config.training.use_lr_scheduler:
+            self.scheduler = torch.optim.lr_scheduler.CyclicLR(
+                self.optimizer,
+                base_lr=self.config.training.learning_rate * 0.01,
+                max_lr=self.config.training.learning_rate,
+                cycle_momentum=False,
+            )
+
+        best_val = np.inf
+        pbar = tqdm(range(self.epochs))
+        self.improved_since = 0
+        for epoch in pbar:
+            train_loss = self.train_epoch(epoch, age_steps, scaler, pbar)
+            epoch_val, val_df, val_losses = self.validate_epoch(epoch)
+            best_val, improved = self.save_best_val_loss(epoch_val, best_val, val_df)
+
+            mlflow.log_metric("best_val_loss", best_val, step=epoch)
+
+            if self.early_stopping(improved):
+                break
+
+            # Print training and validation metrics
+            val_str = " - ".join(
+                [f" val_{name}: {value:.5f}" for name, value in val_losses.items()]
+            )
+            log.info(
+                f"Epoch [{epoch+1}/{self.epochs}] - "
+                f"Train Loss: {train_loss:.5f} - "
+                f"{val_str}"
+            )
+
+            # Save last iteration
+            save(
+                self.model,
+                f"regression_{self.train_index}_last",
+                exp_name=self.name,
+                output_dir=self.output_dir,
+            )
+
+        if self.config.profile:
+            prof.stop()
+        return best_val
+
+    def validate_epoch(self, epoch):
+        raise NotImplementedError()
+
+    def train_epoch(self, epoch, age_steps, scaler, pbar):
+        self.update_from_ages_steps(age_steps, epoch)
+
+        train_loss = 0.0
+        self.train_mode()
+
+        # Train for one epoch
+        for i in tqdm(range(len(self.train_loader)), leave=True):
+            loss = self.train_step()
+
+            self.optimize(loss, scaler)
+
+            if self.scheduler is not None:
+                self.scheduler.step()
+
+            train_loss += loss
+
+            train_description_str = f"train loss: \
+                {(train_loss/(i+1)):.5f}"
+            pbar.set_description(train_description_str)
+        log.info(train_description_str)
+        mlflow.log_metric("train_loss", train_loss, step=epoch)
+
+        return train_loss / len(self.train_loader)

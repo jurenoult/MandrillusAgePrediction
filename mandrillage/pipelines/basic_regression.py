@@ -1,5 +1,4 @@
 import os
-import json
 import logging
 
 import numpy as np
@@ -10,7 +9,6 @@ from tqdm import tqdm
 import hydra
 import mlflow
 import pandas as pd
-import matplotlib.pyplot as plt
 
 from lion_pytorch import Lion
 
@@ -156,13 +154,6 @@ class BasicRegressionPipeline(Pipeline):
         )
         self.val_loader = self.make_dataloader(self.val_dataset)
 
-    def update_from_ages_steps(self, ages_steps, epoch):
-        if epoch in ages_steps and epoch != 0:
-            max_age = ages_steps[epoch]
-            log.info(f"Setting training max age to {max_age}")
-            self.train_dataset.filter_by_age(max_age)
-            self.train_loader = self.make_dataloader(self.train_dataset, shuffle=True)
-
     def init_logging(self):
         pass
 
@@ -245,25 +236,6 @@ class BasicRegressionPipeline(Pipeline):
     def init_loggers(self):
         pass
 
-    def save_best_val_loss(self, val_loss, best_val, df):
-        improved = False
-        if val_loss < best_val:
-            improved = True
-            log.info(
-                f"Val loss {self.watch_val_loss} improved from {best_val:.4f} to {val_loss:.4f}"
-            )
-            best_val = val_loss
-            save(
-                self.model,
-                f"regression_{self.train_index}",
-                exp_name=self.name,
-                output_dir=self.output_dir,
-            )
-            df.to_csv(os.path.join(self.output_dir, f"val_raw_predictions_{self.train_index}.csv"))
-        else:
-            log.info(f"Val loss did not improved from {best_val:.4f}")
-        return best_val, improved
-
     def sim_train_step(
         self,
     ):
@@ -276,7 +248,7 @@ class BasicRegressionPipeline(Pipeline):
         x1, x2 = self.xy_to_device(x1, x2, self.device)
         y_pred = self.sim_model((x1, x2))
         sim_loss = self.sim_criterion(y_pred, y)
-        return sim_loss, self.get_size(x1)
+        return sim_loss
 
     def collect_data(self, dataset, model, min_size_predict=256):
         y_true = []
@@ -331,182 +303,229 @@ class BasicRegressionPipeline(Pipeline):
         y_pred = torch.unsqueeze(y_pred, axis=-1)
         return loss(y_pred, y_true)
 
-    def train(self):
-        if self.resume:
-            self.model = load(
-                self.model,
-                f"regression_{self.train_index}",
-                exp_name=self.name,
-                output_dir=self.output_dir,
+    def update_from_ages_steps(self, ages_steps, epoch):
+        if epoch in ages_steps and epoch != 0:
+            max_age = ages_steps[epoch]
+            log.info(f"Setting training max age to {max_age}")
+            self.train_dataset.filter_by_age(max_age)
+            self.train_loader = self.make_dataloader(self.train_dataset, shuffle=True)
+
+    def train_mode(self):
+        self.model.train()
+        if self.sim_model:
+            self.sim_model.train()
+
+    def train_step(self):
+        loss = self.basic_train_step(
+            self.train_loader,
+            self.optimizer,
+            self.model,
+            self.criterion,
+            self.device,
+        )
+
+        # SIMILARITY LOSS
+        if self.config.training.sim_weight > 0 and self.sim_model:
+            sim_loss = self.sim_train_step()
+            loss = (
+                self.config.training.reg_weight * loss + self.config.training.sim_weight * sim_loss
+            )
+        return loss
+
+    def validate_epoch(self, epoch):
+        self.model.eval()
+        val_losses = {}
+
+        with torch.no_grad():
+            # Predict on validation dataset sample per sample to get metadata
+            val_df = self.collect_data(self.val_dataset, self.model)
+
+            for val_name, val_fnct in self.val_criterions.items():
+                val_losses[val_name] = self.val_loss_from_df(val_df, val_fnct)
+
+            std_by_age, std_by_age_by_id = compute_std(val_df, self.output_dir)
+            # Add mean std
+            val_losses["mean_std"] = np.mean(list(std_by_age.values()))
+            # Add mean std per id per age
+            val_losses["mean_std_by_id_by_age"] = np.mean(list(std_by_age_by_id.values()))
+
+            display_worst_regression_cases(
+                val_df, self.val_dataset, self.days_scale, self.output_dir, max_n=10, epoch=epoch
             )
 
-        # Age steps with number of epochs
+            css = compute_cumulative_scores(val_df)
 
-        # This mean that we set the max age at time 0 to the global max age
-        # It is the default behavior
-        epoch_step = self.epochs
-        age_step = self.train_max_age
+        val_losses["MSE"] = val_losses["MSE"] / (DAYS_IN_YEAR**2)
+        val_loss = val_losses[self.watch_val_loss]
 
-        # We increase the max age of both train/val dataset incrementally
-        # epoch_step = 10
-        # age_step = 0.2
+        mlflow.log_metric("val_loss", val_loss, step=epoch)
+        mlflow.log_metric("val_loss_mse", val_losses["MSE"], step=epoch)
+        mlflow.log_metric("val_loss_std", val_losses["mean_std"], step=epoch)
+        mlflow.log_metric("val_loss_std_by_id", val_losses["mean_std_by_id_by_age"], step=epoch)
+        mlflow.log_metrics(css, step=epoch)
 
-        ages_steps = {
-            i * epoch_step: min(self.train_max_age, (i + 1) * age_step)
-            for i in range(int(self.train_max_age // age_step) + 1)
-        }
-        print(ages_steps)
+        return val_loss, val_df, val_losses
 
-        if self.config.profile:
-            prof = torch.profiler.profile(
-                schedule=torch.profiler.schedule(wait=0, warmup=0, active=1, repeat=1),
-                on_trace_ready=torch.profiler.tensorboard_trace_handler(
-                    os.path.join(self.output_dir, "regression_profiler")
-                ),
-                record_shapes=False,
-                with_stack=False,
-            )
-            prof.start()
+    # def train(self):
+    #     if self.resume:
+    #         self.model = load(
+    #             self.model,
+    #             f"regression_{self.train_index}",
+    #             exp_name=self.name,
+    #             output_dir=self.output_dir,
+    #         )
 
-        # Creates once at the beginning of training
-        # Scales the gradients if using fp16
-        scaler = torch.cuda.amp.GradScaler()
+    #     age_steps = self.setup_age_steps()
+    #     print(age_steps)
 
-        self.scheduler = None
-        if self.config.training.use_lr_scheduler:
-            self.scheduler = torch.optim.lr_scheduler.CyclicLR(
-                self.optimizer,
-                base_lr=self.config.training.learning_rate * 0.01,
-                max_lr=self.config.training.learning_rate,
-                cycle_momentum=False,
-            )
+    #     if self.config.profile:
+    #         prof = torch.profiler.profile(
+    #             schedule=torch.profiler.schedule(wait=0, warmup=0, active=1, repeat=1),
+    #             on_trace_ready=torch.profiler.tensorboard_trace_handler(
+    #                 os.path.join(self.output_dir, "regression_profiler")
+    #             ),
+    #             record_shapes=False,
+    #             with_stack=False,
+    #         )
+    #         prof.start()
 
-        # Training loop
-        best_val = np.inf
-        pbar = tqdm(range(self.epochs))
-        improved_since = 0
-        for epoch in pbar:
-            self.update_from_ages_steps(ages_steps, epoch)
+    #     # Creates once at the beginning of training
+    #     # Scales the gradients if using fp16
+    #     scaler = torch.cuda.amp.GradScaler()
 
-            self.model.train()  # Set the model to train mode
-            if self.sim_model:
-                self.sim_model.train()
-            train_loss = 0.0
-            train_sim_loss = 0.0
+    #     self.scheduler = None
+    #     if self.config.training.use_lr_scheduler:
+    #         self.scheduler = torch.optim.lr_scheduler.CyclicLR(
+    #             self.optimizer,
+    #             base_lr=self.config.training.learning_rate * 0.01,
+    #             max_lr=self.config.training.learning_rate,
+    #             cycle_momentum=False,
+    #         )
 
-            for i in tqdm(range(len(self.train_loader)), leave=True):
-                reg_loss, reg_size = self.train_step(
-                    self.train_loader,
-                    self.optimizer,
-                    self.model,
-                    self.criterion,
-                    self.device,
-                )
+    #     # Training loop
+    #     best_val = np.inf
+    #     pbar = tqdm(range(self.epochs))
+    #     improved_since = 0
+    #     for epoch in pbar:
+    #         self.update_from_ages_steps(age_steps, epoch)
 
-                # SIMILARITY LOSS
-                if self.config.training.sim_weight > 0 and self.sim_model:
-                    sim_loss, sim_size = self.sim_train_step()
-                    loss = (
-                        self.config.training.reg_weight * reg_loss
-                        + self.config.training.sim_weight * sim_loss
-                    )
-                    train_sim_loss += sim_loss.item() * sim_size
-                else:
-                    loss = reg_loss
+    #         self.model.train()  # Set the model to train mode
+    #         if self.sim_model:
+    #             self.sim_model.train()
+    #         train_loss = 0.0
+    #         train_sim_loss = 0.0
 
-                # Backward pass and optimization
+    #         for i in tqdm(range(len(self.train_loader)), leave=True):
+    #             reg_loss, reg_size = self.basic_train_step(
+    #                 self.train_loader,
+    #                 self.optimizer,
+    #                 self.model,
+    #                 self.criterion,
+    #                 self.device,
+    #             )
 
-                # Scales the loss, and calls backward()
-                # to create scaled gradients
-                if self.config.training.use_float16:
-                    scaler.scale(loss).backward()
-                    scaler.step(self.optimizer)
-                    scaler.update()
-                else:
-                    loss.backward()
-                    self.optimizer.step()
+    #             # SIMILARITY LOSS
+    #             if self.config.training.sim_weight > 0 and self.sim_model:
+    #                 sim_loss, sim_size = self.sim_train_step()
+    #                 loss = (
+    #                     self.config.training.reg_weight * loss
+    #                     + self.config.training.sim_weight * sim_loss
+    #                 )
+    #                 train_sim_loss += sim_loss.item() * sim_size
 
-                if self.scheduler is not None:
-                    self.scheduler.step()
+    #             # Backward pass and optimization
 
-                train_loss += reg_loss.item() * reg_size
+    #             # Scales the loss, and calls backward()
+    #             # to create scaled gradients
+    #             if self.config.training.use_float16:
+    #                 scaler.scale(loss).backward()
+    #                 scaler.step(self.optimizer)
+    #                 scaler.update()
+    #             else:
+    #                 loss.backward()
+    #                 self.optimizer.step()
 
-                n_samples = self.batch_size * (i + 1)
-                train_description_str = f"Regression train loss: \
-                    {(train_loss/n_samples):.5f} -\
-                    Similarity train loss: {(train_sim_loss/n_samples):.5f}"
-                pbar.set_description(train_description_str)
-            log.info(train_description_str)
-            train_loss /= len(self.train_dataset)
+    #             if self.scheduler is not None:
+    #                 self.scheduler.step()
 
-            mlflow.log_metric("train_loss", train_loss, step=epoch)
+    #             train_loss += reg_loss.item() * reg_size
 
-            # Validation loop
-            self.model.eval()  # Set the model to evaluation mode
-            val_losses = {}
+    #             n_samples = self.batch_size * (i + 1)
+    #             train_description_str = f"Regression train loss: \
+    #                 {(train_loss/n_samples):.5f} -\
+    #                 Similarity train loss: {(train_sim_loss/n_samples):.5f}"
+    #             pbar.set_description(train_description_str)
+    #         log.info(train_description_str)
+    #         train_loss /= len(self.train_dataset)
 
-            val_df = None
-            with torch.no_grad():
-                # Predict on validation dataset sample per sample to get metadata
-                val_df = self.collect_data(self.val_dataset, self.model)
+    #         mlflow.log_metric("train_loss", train_loss, step=epoch)
 
-                for val_name, val_fnct in self.val_criterions.items():
-                    val_losses[val_name] = self.val_loss_from_df(val_df, val_fnct)
+    #         # Validation loop
+    #         self.model.eval()  # Set the model to evaluation mode
+    #         val_losses = {}
 
-                std_by_age, std_by_age_by_id = compute_std(val_df, self.output_dir)
-                # Add mean std
-                val_losses["mean_std"] = np.mean(list(std_by_age.values()))
-                # Add mean std per id per age
-                val_losses["mean_std_by_id_by_age"] = np.mean(list(std_by_age_by_id.values()))
+    #         val_df = None
+    #         with torch.no_grad():
+    #             # Predict on validation dataset sample per sample to get metadata
+    #             val_df = self.collect_data(self.val_dataset, self.model)
 
-                display_worst_regression_cases(val_df, self.val_dataset, max_n=10, epoch=epoch)
+    #             for val_name, val_fnct in self.val_criterions.items():
+    #                 val_losses[val_name] = self.val_loss_from_df(val_df, val_fnct)
 
-                css = compute_cumulative_scores(val_df)
+    #             std_by_age, std_by_age_by_id = compute_std(val_df, self.output_dir)
+    #             # Add mean std
+    #             val_losses["mean_std"] = np.mean(list(std_by_age.values()))
+    #             # Add mean std per id per age
+    #             val_losses["mean_std_by_id_by_age"] = np.mean(list(std_by_age_by_id.values()))
 
-            val_losses["MSE"] = val_losses["MSE"] / (DAYS_IN_YEAR**2)
+    #             display_worst_regression_cases(val_df, self.val_dataset, max_n=10, epoch=epoch)
 
-            val_loss = val_losses[self.watch_val_loss]
-            best_val, improved = self.save_best_val_loss(val_loss, best_val, val_df)
+    #             css = compute_cumulative_scores(val_df)
 
-            # Early stopping
-            if not improved:
-                improved_since += 1
-            else:
-                improved_since = 0
-            if improved_since >= self.early_stopping_patience:
-                log.info(
-                    f"Stopping training since validation loss did not improved for {self.early_stopping_patience} epochs"
-                )
-                break
+    #         val_losses["MSE"] = val_losses["MSE"] / (DAYS_IN_YEAR**2)
 
-            mlflow.log_metric("val_loss", val_loss, step=epoch)
-            mlflow.log_metric("val_loss_mse", val_losses["MSE"], step=epoch)
-            mlflow.log_metric("val_loss_std", val_losses["mean_std"], step=epoch)
-            mlflow.log_metric("val_loss_std_by_id", val_losses["mean_std_by_id_by_age"], step=epoch)
-            mlflow.log_metric("best_val_loss", best_val, step=epoch)
-            mlflow.log_metrics(css, step=epoch)
+    #         val_loss = val_losses[self.watch_val_loss]
+    #         best_val, improved = self.save_best_val_loss(val_loss, best_val, val_df)
 
-            # Print training and validation metrics
-            val_str = " - ".join(
-                [f" val_{name}: {value:.5f}" for name, value in val_losses.items()]
-            )
-            log.info(
-                f"Epoch [{epoch+1}/{self.epochs}] - "
-                f"Train Loss: {train_loss:.5f} - "
-                f"{val_str}"
-            )
+    #         # Early stopping
+    #         if not improved:
+    #             improved_since += 1
+    #         else:
+    #             improved_since = 0
+    #         if improved_since >= self.early_stopping_patience:
+    #             log.info(
+    #                 f"Stopping training since validation loss did not improved for {self.early_stopping_patience} epochs"
+    #             )
+    #             break
 
-            # Save last iteration
-            save(
-                self.model,
-                f"regression_{self.train_index}_last",
-                exp_name=self.name,
-                output_dir=self.output_dir,
-            )
+    #         mlflow.log_metric("val_loss", val_loss, step=epoch)
+    #         mlflow.log_metric("val_loss_mse", val_losses["MSE"], step=epoch)
+    #         mlflow.log_metric("val_loss_std", val_losses["mean_std"], step=epoch)
+    #         mlflow.log_metric("val_loss_std_by_id", val_losses["mean_std_by_id_by_age"], step=epoch)
+    #         mlflow.log_metric("best_val_loss", best_val, step=epoch)
+    #         mlflow.log_metrics(css, step=epoch)
 
-        if self.config.profile:
-            prof.stop()
-        return best_val
+    #         # Print training and validation metrics
+    #         val_str = " - ".join(
+    #             [f" val_{name}: {value:.5f}" for name, value in val_losses.items()]
+    #         )
+    #         log.info(
+    #             f"Epoch [{epoch+1}/{self.epochs}] - "
+    #             f"Train Loss: {train_loss:.5f} - "
+    #             f"{val_str}"
+    #         )
+
+    #         # Save last iteration
+    #         save(
+    #             self.model,
+    #             f"regression_{self.train_index}_last",
+    #             exp_name=self.name,
+    #             output_dir=self.output_dir,
+    #         )
+
+    #     if self.config.profile:
+    #         prof.stop()
+    #     return best_val
 
     def predict_from_dataset(self, x):
         z = torch.unsqueeze(x, axis=0)
