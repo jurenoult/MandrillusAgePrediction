@@ -362,6 +362,7 @@ class Pipeline(object):
         self.train_mode()
 
         # Train for one epoch
+        losses = []
         for i in tqdm(range(len(self.train_loader)), leave=True):
             loss = self.train_step()
 
@@ -370,10 +371,11 @@ class Pipeline(object):
             if self.scheduler is not None:
                 self.scheduler.step()
 
-            train_loss += loss
+            losses.append(loss)
+            train_loss = np.mean(losses)
 
             train_description_str = f"train loss: \
-                {(train_loss/(i+1)):.5f}"
+                {(train_loss):.5f}"
             pbar.set_description(train_description_str)
         log.info(train_description_str)
         mlflow.log_metric("train_loss", train_loss, step=epoch)

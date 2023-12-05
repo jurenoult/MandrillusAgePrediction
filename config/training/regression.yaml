@@ -7,7 +7,7 @@ train_backbone: True
 use_augmentation: True
 use_similarity_augmentation: False
 backbone_checkpoint: null
-early_stopping_patience: 10
+early_stopping_patience: 20
 optimizer: lion
 max_workers: 0
 use_float16: False
