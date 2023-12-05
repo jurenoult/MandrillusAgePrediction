@@ -371,7 +371,7 @@ class Pipeline(object):
             if self.scheduler is not None:
                 self.scheduler.step()
 
-            losses.append(loss)
+            losses.append(loss.detach().cpu().numpy())
             train_loss = np.mean(losses)
 
             train_description_str = f"train loss: \
