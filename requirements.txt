@@ -19,3 +19,4 @@ xformers
 lion-pytorch
 Sophia-Optimizer
 click
+onnxruntime

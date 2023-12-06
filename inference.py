@@ -2,11 +2,11 @@ import numpy as np
 import click
 from skimage import io
 import time
-
 import onnxruntime as ort
 
 
 def load_model(model_path):
+    print(f"Using device : {ort.get_device()}")
     ort_sess = ort.InferenceSession(model_path)
     return ort_sess
 
