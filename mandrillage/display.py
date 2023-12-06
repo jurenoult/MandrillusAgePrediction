@@ -23,7 +23,10 @@ def display_worst_regression_cases(df, dataset, days_scale, output_dir, max_n, e
         real_index = row.index.values[0]
         photo_id = row["photo_path"].values[0]
 
-        x, y = dataset[real_index]
+        data = dataset[real_index]
+        x = torch.tensor(data["input"])
+        y = data["age"]
+
         y_pred = row["y_pred"].values[0]
         y = np.round(y * days_scale)
 

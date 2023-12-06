@@ -188,9 +188,11 @@ class AugmentedDataset(Dataset):
         return image
 
     def __getitem__(self, idx):
-        x, y = self.subset._getpair(idx)
+        data = self.subset._getpair(idx)
+        x = data["input"]
         x = self._augment(x)
-        return torch.tensor(x), torch.tensor(y)
+        data["input"] = x
+        return data
 
     def classes(self):
         return self.subset.classes()
@@ -386,7 +388,20 @@ class MandrillImageDataset(Dataset):
 
         image = np.moveaxis(image, -1, 0).astype(np.float32)  # Channel first format
 
-        return image, target
+        sex_index = 0 if row["sex"].values[0] == "m" else 1
+        sex_tensor = np.zeros(2)
+        sex_tensor[sex_index] = 1.0
+
+        face_quality = row["face_qual"].values[0]
+        face_quality_tensor = np.zeros(3)
+        face_quality_tensor[face_quality - 1] = 1.0
+
+        return {
+            "input": image,
+            "age": float(target),
+            "face_quality": face_quality_tensor,
+            "sex": sex_tensor,
+        }
 
     def _getpair(self, idx):
         # All datas for this mandrill
@@ -410,8 +425,10 @@ class MandrillImageDataset(Dataset):
         # if self.training:
         #     partition_index = idx % len(self.age_partitions)
         #     idx = random.choice(self.age_partitions[partition_index])
-        x, y = self._getpair(idx)
-        return torch.tensor(x), torch.tensor(y)
+        # x, y = self._getpair(idx)
+        # return torch.tensor(x), torch.tensor(y)
+        data = self._getpair(idx)
+        return data
 
     def classes(self):
         return list(self.data_classes.values())
@@ -533,8 +550,11 @@ class MandrillSimilarityImageDataset(MandrillImageDataset):
         # However not all cases exist and we have to consider what samples
         # have been taken to update whether the two photo have the same age or not
         id1, id2 = self.get_photo_pair(_id, age, is_same_mandrill, is_same_age)
-        x1, y1 = self._getpair(id1)
-        x2, y2 = self._getpair(id2)
+        data1 = self._getpair(id1)
+        x1, y1 = data1["input"], data1["age"]
+
+        data2 = self._getpair(id2)
+        x2, y2 = data2["input"], data2["age"]
 
         # Update the bool value based on what samples were drawn
         is_same_age = self.compute_is_same_age(y1, y2)

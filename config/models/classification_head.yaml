@@ -1,7 +1,5 @@
 _target_: mandrillage.models.ClassificationHead
 input_dim: 1024
-n_input: 2
 n_classes: 2
 lin_start: 256
 n_lin: 0
-use_concat: true

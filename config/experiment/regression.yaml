@@ -6,12 +6,16 @@ pipeline:
 defaults:
   - override /models@backbone: dinov2.yaml
   - override /models@regression_head: regression_head.yaml
-  - override /models@similarity_head: classification_head.yaml
+  - override /models@similarity_head: similarity_classification_head.yaml
+  - override /models@sex_head: classification_head.yaml
+  - override /models@face_quality_head: classification_head.yaml
   - override /dataset: db2.yaml
   - override /training: regression.yaml
   - override /losses@train_regression_loss: mse.yaml
   - override /losses@val_regression_loss: mae.yaml
   - override /losses@train_similarity_loss: crossentropy.yaml
+  - override /losses@face_quality_loss: crossentropy.yaml
+  - override /losses@sex_loss: crossentropy.yaml
 
 name: "regression"
 train: True

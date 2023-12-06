@@ -120,7 +120,10 @@ class Pipeline(object):
         return total_val_loss / repeat
 
     def to_device(self, x, device):
-        if isinstance(x, list):
+        if isinstance(x, dict):
+            for key in x.keys():
+                x[key] = x[key].to(device)
+        elif isinstance(x, list):
             for i in range(len(x)):
                 x[i] = x[i].to(device)
         else:
@@ -143,20 +146,37 @@ class Pipeline(object):
             size = x.size(0)
         return size
 
-    def basic_train_step(self, loader, optimizer, model, criterion, device):
-        x, y = next(iter(loader))
-        x, y = self.xy_to_device(x, y, device)
+    def multihead_train_step(self, x, y, backbone, heads, criterions, weights):
+        backbone_features = backbone(x)
+        losses = {}
+        for head_name, head_model in heads.items():
+            y_hat = head_model(backbone_features)
+            if y[head_name].dtype == torch.float64:
+                y[head_name] = y[head_name].type(torch.float)
+            loss = criterions[head_name](y_hat, y[head_name])
+            losses[head_name] = loss
+
+        # Weight losses
+        losses = {head_name: (value * weights[head_name]) for head_name, value in losses.items()}
+        # Sum losses
+        loss = torch.sum(torch.stack(list(losses.values())))
+
+        losses["train"] = loss.float()
+
+        return losses
+
+    def basic_train_step(self, loader, backbone, heads, criterions, weights, device):
+        data = next(iter(loader))
+        x = data.pop("input")
+        x, y = self.xy_to_device(x, data, device)
 
         if self.config.training.use_float16:
             with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
-                # Forward pass
-                y_hat = model(x)
-                loss = criterion(y_hat, y)
+                losses = self.multihead_train_step(x, y, backbone, heads, criterions, weights)
         else:
-            y_hat = model(x)
-            loss = criterion(y_hat, y)
+            losses = self.multihead_train_step(x, y, backbone, heads, criterions, weights)
 
-        return loss
+        return losses
 
     def test(self):
         raise ValueError("You must subclass self.test() method")
@@ -293,7 +313,7 @@ class Pipeline(object):
             )
 
         age_steps = self.setup_age_steps()
-        print(age_steps)
+        log.info(f"Using ages steps: {age_steps}")
 
         if self.config.profile:
             prof = torch.profiler.profile(
@@ -358,26 +378,44 @@ class Pipeline(object):
     def train_epoch(self, epoch, age_steps, scaler, pbar):
         self.update_from_ages_steps(age_steps, epoch)
 
-        train_loss = 0.0
         self.train_mode()
 
         # Train for one epoch
-        losses = []
+        train_losses = None
         for i in tqdm(range(len(self.train_loader)), leave=True):
-            loss = self.train_step()
+            step_losses = self.train_step()
+            train_loss = step_losses["train"]
 
-            self.optimize(loss, scaler)
+            self.optimize(train_loss, scaler)
 
             if self.scheduler is not None:
                 self.scheduler.step()
 
-            losses.append(loss.detach().cpu().numpy())
-            train_loss = np.mean(losses)
+            # Convert losses to float to use for display
+            losses = {
+                loss_name: [loss_value.detach().cpu().numpy()]
+                for loss_name, loss_value in step_losses.items()
+            }
+            if train_losses is None:
+                train_losses = losses
+            else:
+                for loss_name, loss_value in losses.items():
+                    train_losses[loss_name] += loss_value
 
-            train_description_str = f"train loss: \
-                {(train_loss):.5f}"
+            # Create training description
+            train_description_str = [
+                f"{loss_name}: {(np.mean(loss_values)):.5f}"
+                for loss_name, loss_values in train_losses.items()
+            ]
+            train_description_str = " - ".join(train_description_str)
             pbar.set_description(train_description_str)
-        log.info(train_description_str)
-        mlflow.log_metric("train_loss", train_loss, step=epoch)
 
-        return train_loss
+        log.info(train_description_str)
+
+        # Compute and log mean losses for this epoch
+        mean_losses = {
+            loss_name: np.mean(loss_values) for loss_name, loss_values in train_losses.items()
+        }
+        mlflow.log_metrics(mean_losses, step=epoch)
+
+        return mean_losses["train"]

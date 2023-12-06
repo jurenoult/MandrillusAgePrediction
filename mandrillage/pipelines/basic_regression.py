@@ -45,6 +45,8 @@ class BasicRegressionPipeline(Pipeline):
     def __init__(self):
         super(BasicRegressionPipeline, self).__init__()
         self.sim_model = None
+        self.sex_head = None
+        self.face_quality_head = None
 
     def make_dataloader(self, dataset, shuffle=False, sampler=None, is_training=False):
         num_workers = 0 if not is_training else self.config.training.max_workers
@@ -189,10 +191,20 @@ class BasicRegressionPipeline(Pipeline):
         self.regression_head = hydra.utils.instantiate(self.config.regression_head)
         self.model = SequentialModel(backbone=self.backbone, head=self.regression_head)
 
-        if self.config.similarity_head:
+        if self.config.training.use_similarity_head:
             self.config.similarity_head.input_dim = self.backbone.output_dim
             self.sim_model = hydra.utils.instantiate(self.config.similarity_head)
             self.sim_model.backbone = self.backbone
+
+        if self.config.training.use_face_quality_head:
+            self.config.face_quality_head.input_dim = self.backbone.output_dim
+            self.config.face_quality_head.n_classes = 3
+            self.face_quality_head = hydra.utils.instantiate(self.config.face_quality_head)
+
+        if self.config.training.use_sex_head:
+            self.config.sex_head.input_dim = self.backbone.output_dim
+            self.config.sex_head.n_classes = 2
+            self.sex_head = hydra.utils.instantiate(self.config.sex_head)
 
         self.backbone = self.backbone.to(self.device)
         self.model = self.model.to(self.device)
@@ -200,19 +212,40 @@ class BasicRegressionPipeline(Pipeline):
         if self.sim_model:
             self.sim_model = self.sim_model.to(self.device)
 
+        self.heads = {"age": self.regression_head}
+        if self.face_quality_head:
+            self.face_quality_head = self.face_quality_head.to(self.device)
+            self.heads["face_quality"] = self.face_quality_head
+        if self.sex_head:
+            self.sex_head = self.sex_head.to(self.device)
+            self.heads["sex"] = self.sex_head
+
     def init_losses(self):
-        train_error_function = hydra.utils.instantiate(self.config.train_regression_loss)
+        train_age_error_function = hydra.utils.instantiate(self.config.train_regression_loss)
         val_error_function = hydra.utils.instantiate(self.config.val_regression_loss)
 
         if self.sim_model:
             self.sim_criterion = hydra.utils.instantiate(self.config.train_similarity_loss)
 
-        self.criterion = train_error_function
         self.val_criterions = {
             "MSE": torch.nn.MSELoss(),
             "L1": val_error_function,
         }
         self.watch_val_loss = "L1"
+
+        self.criterions = {"age": train_age_error_function}
+        self.weights = {"age": float(self.config.training.reg_weight)}
+
+        if self.face_quality_head:
+            self.criterions["face_quality"] = hydra.utils.instantiate(self.config.face_quality_loss)
+            self.weights["face_quality"] = self.config.training.face_quality_weight
+
+        if self.sex_head:
+            self.criterions["sex"] = hydra.utils.instantiate(self.config.sex_loss)
+            self.weights["sex"] = self.config.training.sex_weight
+
+        log.info(f"Using criterions {list(self.criterions.keys())}")
+        log.info(f"Using weights {list(self.criterions.items())}")
 
     def init_optimizers(self):
         if not self.config.training.train_backbone:
@@ -260,8 +293,10 @@ class BasicRegressionPipeline(Pipeline):
         prediction_stack = []
         n = len(dataset)
         for i in tqdm(range(n), leave=False):
-            x, y = dataset[i]
-            x = x.to(self.device)
+            data = dataset[i]
+            x = data["input"]
+            y = data["age"]
+            x = torch.tensor(x).to(self.device)
             metadata = dataset.get_metadata_at_index(i)
 
             prediction_stack.append(x)
@@ -276,7 +311,7 @@ class BasicRegressionPipeline(Pipeline):
 
                 prediction_stack = []
 
-            y = np.round(y.numpy() * self.days_scale)
+            y = np.round(y * self.days_scale)
             y_true.append(y)
             metadatas.append(metadata["id"])
             photo_paths.append(metadata["photo_path"])
@@ -317,21 +352,23 @@ class BasicRegressionPipeline(Pipeline):
             self.sim_model.train()
 
     def train_step(self):
-        loss = self.basic_train_step(
+        losses = self.basic_train_step(
             self.train_loader,
-            self.optimizer,
-            self.model,
-            self.criterion,
+            self.backbone,
+            self.heads,
+            self.criterions,
+            self.weights,
             self.device,
         )
 
         # SIMILARITY LOSS
         if self.config.training.sim_weight > 0 and self.sim_model:
             sim_loss = self.sim_train_step()
-            loss = (
-                self.config.training.reg_weight * loss + self.config.training.sim_weight * sim_loss
-            )
-        return loss
+            sim_loss = self.config.training.sim_weight * sim_loss
+            losses["train"] = losses["train"] + sim_loss
+            losses["similarity"] = sim_loss
+
+        return losses
 
     def validate_epoch(self, epoch):
         self.model.eval()

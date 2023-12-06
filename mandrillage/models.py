@@ -243,7 +243,7 @@ class RegressionHead(nn.Module):
         output_dim=1,
         lin_start=2048,
         n_lin=6,
-        sigmoid=True,
+        sigmoid=False,
         dropout=0.0,
         use_norm=False,
     ):
@@ -322,7 +322,7 @@ class DinoV2(nn.Module):
         return self.features(x)
 
 
-class ClassificationHead(nn.Module):
+class SimilarityClassificationHead(nn.Module):
     def __init__(
         self,
         input_dim=1024,
@@ -332,7 +332,7 @@ class ClassificationHead(nn.Module):
         n_lin=3,
         use_concat=True,
     ):
-        super(ClassificationHead, self).__init__()
+        super(SimilarityClassificationHead, self).__init__()
         self.blocks = None
         self.use_concat = use_concat
 
@@ -370,6 +370,40 @@ class ClassificationHead(nn.Module):
             z = self.blocks(z)
         z = self.class_layer(z)
         return z
+
+
+class ClassificationHead(nn.Module):
+    def __init__(
+        self,
+        input_dim=1024,
+        n_classes=2,
+        lin_start=256,
+        n_lin=3,
+    ):
+        super(ClassificationHead, self).__init__()
+        self.blocks = None
+
+        previous_feature_size = input_dim
+        # previous_feature_size = input_dim
+        current_feature_size = lin_start
+        last_feature_size = previous_feature_size
+        if n_lin > 0:
+            lin_layers, last_feature_size = build_layers(
+                n_lin, self.block, previous_feature_size, current_feature_size
+            )
+            self.blocks = nn.Sequential(lin_layers)
+        self.class_layer = nn.Linear(last_feature_size, n_classes, bias=False)
+
+    def block(self, in_features, out_features):
+        lin = nn.Linear(in_features, out_features)
+        relu = nn.ReLU(inplace=True)
+        return nn.Sequential(lin, relu)
+
+    def forward(self, x):
+        if self.blocks:
+            x = self.blocks(x)
+        x = self.class_layer(x)
+        return x
 
 
 class VGGFace(nn.Module):

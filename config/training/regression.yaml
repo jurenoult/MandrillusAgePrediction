@@ -1,11 +1,21 @@
 learning_rate: 0.000001
 batch_size: 256
 epochs: 100
-sim_weight: 0.001
 reg_weight: 1.0
 train_backbone: True
 use_augmentation: True
+
+# Enable multi head
 use_similarity_augmentation: False
+use_similarity_head: False
+sim_weight: 0.001
+
+use_face_quality_head: False
+face_quality_weight: 1.0
+
+use_sex_head: False
+sex_weight: 1.0
+
 backbone_checkpoint: null
 early_stopping_patience: 20
 optimizer: lion
