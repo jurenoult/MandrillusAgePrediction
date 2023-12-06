@@ -1,38 +1,30 @@
 import numpy as np
-import torch
-from mandrillage.models import DinoV2
 import click
 from skimage import io
+import time
+
+import onnxruntime as ort
 
 
-def preload_backbone():
-    DinoV2("small")
-
-
-def load_model(backbone_name, weights_path):
-    preload_backbone()
-
-    model = torch.load(weights_path)
-    model.eval()
-    return model
+def load_model(model_path):
+    ort_sess = ort.InferenceSession(model_path)
+    return ort_sess
 
 
 def preprocess(image):
     image = image.astype(np.float32) / 255.0
+    image = np.moveaxis(image, -1, 0)
+    image = np.expand_dims(image, axis=0)
     return image
 
 
-def inference(model, image, device):
+def inference(model, image):
     image = preprocess(image)
-    image = np.moveaxis(image, -1, 0)
-    image = torch.tensor(image)
-    image = image.to(device)
-    image = torch.unsqueeze(image, dim=0)
-
-    prediction = model(image)
-    prediction = prediction[0]
-
-    return prediction.detach().cpu().numpy()
+    start_time = time.time()
+    outputs = model.run(None, {"input": image})
+    end_time = time.time()
+    print(f"Inference time took: {(end_time - start_time):.3f} sec")
+    return outputs[0]
 
 
 @click.command()
@@ -47,9 +39,9 @@ def inference(model, image, device):
     help="Path to image to use.",
 )
 def main(model_path, image_path):
-    model = load_model("dinov2_medium", model_path)
+    model = load_model(model_path)
     image = io.imread(image_path)
-    age = inference(model, image, torch.device("cuda"))
+    age = inference(model, image)
     print(f"Predicted age: {age}")
 
 
