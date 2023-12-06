@@ -45,6 +45,10 @@ def filter_by_age(data, age_in_days):
     return data[data["age"] <= age_in_days]
 
 
+def filter_unknown_dob_errors(data):
+    return data[data["error_dob"] >= 0]
+
+
 def filter_by_certainty(data, max_dob_error):
     return data[data["error_dob"] <= max_dob_error]
 
@@ -67,8 +71,7 @@ def filter_by_sex(data, sex):
 
 def read_dataset(
     path,
-    filter_dob_error=True,
-    filter_certainty=False,
+    filter_unknown_dob_error=False,
     max_dob_error=0,
     sex=None,
 ):
@@ -92,17 +95,24 @@ def read_dataset(
     # data["shootdate"].replace("", np.nan, inplace=True)
     len_raw = len(data)
     data = data.dropna()
-    len_filter_errors = len(data)
-    print(f"Filtered #{len_filter_errors-len_raw} ({len_filter_errors}/{len_raw})")
+
     data["age"] = data.apply(compute_age, axis=1)
 
     if sex:
         assert sex == "f" or sex == "m", "Expected sex to be either 'f' (female) or 'm' (male)"
         data = filter_by_sex(data, sex)
-    if filter_certainty:
-        data = filter_by_certainty(data, max_dob_error)
-    if filter_dob_error:
-        data = filter_dob_errors(data)
+    # Filter all entries where the dob uncertainty is unknown (i.e. -1)
+    if filter_unknown_dob_error:
+        data = filter_unknown_dob_errors(data)
+
+    # Filter dob uncertainty that are above a certain threshold
+    data = filter_by_certainty(data, max_dob_error)
+
+    # Filter dob entries that are erronous
+    data = filter_dob_errors(data)
+
+    len_filter_errors = len(data)
+    print(f"Filtered #{len_filter_errors-len_raw} ({len_filter_errors}/{len_raw})")
 
     print(f"Min age = {data['age'].min()}")
     print(f"Max age = {data['age'].max()}")

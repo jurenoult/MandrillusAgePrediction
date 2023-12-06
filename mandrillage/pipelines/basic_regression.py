@@ -67,8 +67,7 @@ class BasicRegressionPipeline(Pipeline):
         # Read data
         self.data = read_dataset(
             self.dataset_metadata_path,
-            filter_dob_error=True,
-            filter_certainty=self.config.dataset.dob_certain_only,
+            filter_unknown_dob_error=self.config.dataset.dob_error_known,
             max_dob_error=self.max_dob_error,
             sex=self.sex,
         )
