@@ -380,4 +380,4 @@ class Pipeline(object):
         log.info(train_description_str)
         mlflow.log_metric("train_loss", train_loss, step=epoch)
 
-        return train_loss / len(self.train_loader)
+        return train_loss
