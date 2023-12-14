@@ -315,16 +315,21 @@ class Pipeline(object):
         age_steps = self.setup_age_steps()
         log.info(f"Using ages steps: {age_steps}")
 
+        self.prof = None
         if self.config.profile:
-            prof = torch.profiler.profile(
-                schedule=torch.profiler.schedule(wait=0, warmup=0, active=1, repeat=1),
+            self.prof = torch.profiler.profile(
+                activities=[
+                    torch.profiler.ProfilerActivity.CPU,
+                    torch.profiler.ProfilerActivity.CUDA,
+                ],
+                schedule=torch.profiler.schedule(wait=1, warmup=1, active=12, repeat=1),
                 on_trace_ready=torch.profiler.tensorboard_trace_handler(
                     os.path.join(self.output_dir, "profiler")
                 ),
                 record_shapes=False,
                 with_stack=False,
             )
-            prof.start()
+            self.prof.start()
 
         scaler = torch.cuda.amp.GradScaler()
 
@@ -369,7 +374,7 @@ class Pipeline(object):
             )
 
         if self.config.profile:
-            prof.stop()
+            self.prof.stop()
         return best_val
 
     def validate_epoch(self, epoch):
@@ -409,6 +414,9 @@ class Pipeline(object):
             ]
             train_description_str = " - ".join(train_description_str)
             pbar.set_description(train_description_str)
+
+            if self.prof:
+                self.prof.step()
 
         log.info(train_description_str)
 

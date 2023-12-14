@@ -65,13 +65,10 @@ def create_kfold_data(dataset, k, fold_index):
     return train_indices, val_indices
 
 
-def split_indices(data, train_ratio):
+def split_indices(data, train_ratio, fold_index=0):
     val_split = 1.0 - train_ratio
     k = int(1.0 // val_split)
-    # val_k = k - 1
-    val_k = 0
-
-    return create_kfold_data(data, k, val_k)
+    return create_kfold_data(data, k, fold_index=fold_index)
 
 
 def save(model, prefix, exp_name, output_dir):

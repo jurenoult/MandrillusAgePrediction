@@ -297,8 +297,8 @@ class RegressionHead(nn.Module):
             x = self.activation(x)
 
         # Post processing to have only positive values
-        if not self.training:
-            x = torch.max(self.zero_tensor, x)
+        # if not self.training:
+        #     x = torch.max(self.zero_tensor, x)
         return x
 
 
