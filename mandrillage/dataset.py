@@ -12,6 +12,9 @@ from torch.utils.data import Dataset
 
 from mandrillage.utils import DAYS_IN_YEAR
 
+# Fix multithread spawning
+cv2.setNumThreads(0)
+
 CSV_ROWS = [
     "photo_name",
     "id",
