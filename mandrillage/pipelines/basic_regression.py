@@ -62,7 +62,9 @@ class BasicRegressionPipeline(Pipeline):
             batch_size=self.batch_size,
             shuffle=shuffle,
             num_workers=num_workers,
+            persistent_workers=True if num_workers > 0 else False,
             pin_memory=True if num_workers > 0 else False,
+            prefetch_factor=4 if num_workers > 0 else None,
         )
 
     def prepare_data(self):
