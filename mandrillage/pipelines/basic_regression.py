@@ -487,7 +487,7 @@ class BasicRegressionPipeline(Pipeline):
         # Log css and MAE
         css = compute_cumulative_scores(data)
         mlflow.log_metrics(css)
-        mlflow.log_metrics(
+        mlflow.log_metric(
             "test_mae", results[self.name][self.name + "_regression"][self.name + "_regression_mae"]
         )
 
