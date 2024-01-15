@@ -313,7 +313,7 @@ class DinoV2(nn.Module):
             self.backbone = torch.hub.load("facebookresearch/dinov2", "dinov2_vitb14")
         if dino_type == "large":
             self.output_dim = 1000
-            self.backbone = torch.hub.load("facebookresearch/dinov2", "dinov2_vitl14_lc")
+            self.backbone = torch.hub.load("facebookresearch/dinov2", "dinov2_vitl14")
 
     def features(self, x):
         return self.backbone(x)
