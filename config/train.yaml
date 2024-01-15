@@ -21,3 +21,4 @@ defaults:
   - experiment: null
 
 name: null
+date: ${now:%Y-%m-%d}_${now:%H-%M-%S}
