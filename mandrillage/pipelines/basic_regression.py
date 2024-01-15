@@ -484,6 +484,13 @@ class BasicRegressionPipeline(Pipeline):
         scores_path = os.path.join(self.output_dir, f"scores_{self.train_index}.json")
         write_results(scores_path, results)
 
+        # Log css and MAE
+        css = compute_cumulative_scores(data)
+        mlflow.log_metrics(css)
+        mlflow.log_metrics(
+            "test_mae", results[self.name][self.name + "_regression"][self.name + "_regression_mae"]
+        )
+
         # log.info("Performing inference per individual")
         # self.predict_per_individual(self.val_dataset)
 
