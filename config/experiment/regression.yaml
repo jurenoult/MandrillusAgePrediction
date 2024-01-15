@@ -21,6 +21,6 @@ name: "regression"
 train: True
 test: True
 resume: False
-kfold: 0
+kfold: 5
 kfold_index: 0
 profile: False

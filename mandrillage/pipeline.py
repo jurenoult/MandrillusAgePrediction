@@ -21,7 +21,7 @@ class Pipeline(object):
     def set_config(self, config, output_dir):
         OmegaConf.resolve(config)
         self.config = config
-        self.output_dir = output_dir
+        self.base_output_dir = output_dir
         self.init_parameters()
 
         exps = mlflow.search_experiments(filter_string=f"name='{self.name}'")
@@ -87,6 +87,8 @@ class Pipeline(object):
         self.name = self.config.name + f"_{self.kfold}folds"
         if self.config.kfold_index != -1:
             self.name += f"_k:{self.config.kfold_index}"
+
+        print(self.name)
 
     def init_datamodule(self):
         raise ValueError("You must subclass self.init_datamodule() method")
@@ -183,6 +185,9 @@ class Pipeline(object):
         raise ValueError("You must subclass self.test() method")
 
     def init(self):
+        self.output_dir = os.path.join(self.base_output_dir, f"{self.train_index}")
+        os.makedirs(self.output_dir, exist_ok=True)
+
         log.info("Initializing experiment...")
         log.info("Initializing logging...")
         self.init_logging()
