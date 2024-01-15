@@ -8,4 +8,3 @@ hydra:
     subdir: ${hydra.job.num}
 
 name_suffix: ""
-date: ${now:%Y-%m-%d}_${now:%H-%M-%S}
