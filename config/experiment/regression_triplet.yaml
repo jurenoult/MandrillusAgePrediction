@@ -16,7 +16,6 @@ dataset:
   dob_certain_only: False
   max_dob_error: 15
   in_memory: True
-  train_ratio: 0.8
   sex: null
 
 training:

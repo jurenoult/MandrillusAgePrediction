@@ -64,14 +64,9 @@ class CoralClassificationPipeline(Pipeline):
         # self.data = resample(self.data, bins=self.n_classes)
 
         # Make the split based on individual ids (cannot separate photos from the same id)
-        if self.kfold == 0:
-            self.train_indices, self.val_indices = split_indices(
-                self.data, self.train_ratio
-            )
-        else:
-            self.train_indices, self.val_indices = create_kfold_data(
-                self.data, k=self.kfold, fold_index=self.train_index
-            )
+        self.train_indices, self.val_indices = create_kfold_data(
+            self.data, k=self.kfold, fold_index=self.train_index
+        )
 
         # Create dataset based on indices
         self.train_dataset = ClassificationMandrillImageDataset(
@@ -240,9 +235,7 @@ class CoralClassificationPipeline(Pipeline):
         # For each individual
         ids = val_dataset.df.groupby(["id"])
 
-        prediction_outputdir = os.path.join(
-            self.output_dir, f"prediction_{self.train_index}"
-        )
+        prediction_outputdir = os.path.join(self.output_dir, f"prediction_{self.train_index}")
         os.makedirs(prediction_outputdir, exist_ok=True)
 
         for _id, group in tqdm(ids, total=len(ids)):
@@ -326,9 +319,7 @@ class CoralClassificationPipeline(Pipeline):
         log.info("Performing inference per individual")
         self.predict_per_individual(self.val_dataset)
 
-        return results[self.name][self.name + "_regression"][
-            self.name + "_regression_mae"
-        ]
+        return results[self.name][self.name + "_regression"][self.name + "_regression_mae"]
 
     def init_parameters(self):
         super().init_parameters()

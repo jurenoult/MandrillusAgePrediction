@@ -51,17 +51,10 @@ class BasicClassificationPipeline(Pipeline):
             max_dob_error=self.max_dob_error,
         )
 
-        # self.data = resample(self.data, bins=self.n_classes)
-
         # Make the split based on individual ids (cannot separate photos from the same id)
-        if self.kfold == 0:
-            self.train_indices, self.val_indices = split_indices(
-                self.data, self.train_ratio
-            )
-        else:
-            self.train_indices, self.val_indices = create_kfold_data(
-                self.data, k=self.kfold, fold_index=self.train_index
-            )
+        self.train_indices, self.val_indices = create_kfold_data(
+            self.data, k=self.kfold, fold_index=self.train_index
+        )
 
         # Create dataset based on indices
         self.train_dataset = ClassificationMandrillImageDataset(
@@ -106,9 +99,7 @@ class BasicClassificationPipeline(Pipeline):
     def init_losses(self):
         # Losses
         self.criterion = nn.CrossEntropyLoss()
-        self.val_criterion = Accuracy(task="multiclass", num_classes=self.n_classes).to(
-            self.device
-        )
+        self.val_criterion = Accuracy(task="multiclass", num_classes=self.n_classes).to(self.device)
 
     def init_optimizers(self):
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
@@ -154,9 +145,7 @@ class BasicClassificationPipeline(Pipeline):
                 train_loss += classif_loss.item() * reg_size
 
                 n_samples = self.batch_size * (i + 1)
-                pbar.set_description(
-                    f"Regression train loss: {(train_loss/n_samples):.5f}"
-                )
+                pbar.set_description(f"Regression train loss: {(train_loss/n_samples):.5f}")
 
             train_loss /= len(self.train_dataset)
 
@@ -211,9 +200,7 @@ class BasicClassificationPipeline(Pipeline):
         # For each individual
         ids = val_dataset.df.groupby(["id"])
 
-        prediction_outputdir = os.path.join(
-            self.output_dir, f"prediction_{self.train_index}"
-        )
+        prediction_outputdir = os.path.join(self.output_dir, f"prediction_{self.train_index}")
         os.makedirs(prediction_outputdir, exist_ok=True)
 
         for _id, group in tqdm(ids, total=len(ids)):
@@ -296,9 +283,7 @@ class BasicClassificationPipeline(Pipeline):
 
             file.write(json.dumps(results, cls=NumpyEncoder))
 
-        return results[self.name][self.name + "_regression"][
-            self.name + "_regression_mae"
-        ]
+        return results[self.name][self.name + "_regression"][self.name + "_regression_mae"]
 
     def init_parameters(self):
         super().init_parameters()

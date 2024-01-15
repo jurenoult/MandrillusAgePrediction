@@ -50,8 +50,6 @@ class Pipeline(object):
         mlflow.log_param("val_loss_type", self.config.val_regression_loss._target_)
 
     def init_parameters(self):
-        self.name = self.config.name
-
         self.train_max_age = self.config.dataset.train_max_age
         self.val_max_age = self.config.dataset.val_max_age
         self.train_min_quality = self.config.dataset.train_min_quality
@@ -74,7 +72,6 @@ class Pipeline(object):
         self.learning_rate = self.config.training.learning_rate
         self.batch_size = self.config.training.batch_size
         self.epochs = self.config.training.epochs
-        self.train_ratio = self.config.dataset.train_ratio
         self.in_mem = self.config.dataset.in_memory
         self.resume = self.config.resume
 
@@ -86,6 +83,10 @@ class Pipeline(object):
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         log.info(f"Using device: {self.device}")
+
+        self.name = self.config.name + f"_{self.kfold}folds"
+        if self.config.kfold_index != -1:
+            self.name += f"_k:{self.config.kfold_index}"
 
     def init_datamodule(self):
         raise ValueError("You must subclass self.init_datamodule() method")
@@ -204,7 +205,10 @@ class Pipeline(object):
         training_score = None
         test_score = None
 
-        if self.kfold > 1:
+        assert self.config.kfold > 1, "kfold must be set to k > 1"
+
+        # If the kfold index is set to -1, loop over all possible k
+        if self.config.kfold_index == -1:
             test_scores = {}
             for i in range(self.kfold):
                 self.train_index = i
@@ -226,6 +230,7 @@ class Pipeline(object):
             # Return mean score
             test_scores = np.mean(test_scores)
         else:
+            self.train_index = self.config.kfold_index
             self.init()
             if self.config.train:
                 training_score = self.train()

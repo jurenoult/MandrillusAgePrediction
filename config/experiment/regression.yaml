@@ -22,4 +22,5 @@ train: True
 test: True
 resume: False
 kfold: 0
+kfold_index: 0
 profile: False

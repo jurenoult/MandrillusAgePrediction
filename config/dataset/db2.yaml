@@ -10,7 +10,6 @@ val_faceview: 1
 dob_error_known: True
 max_dob_error: 15
 in_memory: True
-train_ratio: 0.8
 sex: null
 similarity_threshold:
   - factor: 0.05

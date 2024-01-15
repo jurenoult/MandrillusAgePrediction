@@ -77,12 +77,9 @@ class BasicRegressionPipeline(Pipeline):
         )
 
         # Make the split based on individual ids (cannot separate photos from the same id)
-        if self.kfold == 0:
-            self.train_indices, self.val_indices = split_indices(self.data, self.train_ratio)
-        else:
-            self.train_indices, self.val_indices = create_kfold_data(
-                self.data, k=self.kfold, fold_index=self.train_index
-            )
+        self.train_indices, self.val_indices = create_kfold_data(
+            self.data, k=self.kfold, fold_index=self.train_index
+        )
 
         # Extract training set and validation set
         self.data_train = self.data[self.data["id"].isin(self.train_indices)]
