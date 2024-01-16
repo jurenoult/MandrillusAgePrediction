@@ -375,7 +375,7 @@ class BasicRegressionPipeline(Pipeline):
 
         with torch.no_grad():
             # Predict on validation dataset sample per sample to get metadata
-            val_df = self.collect_data(self.val_dataset, self.model)
+            val_df = self.collect_data(self.val_dataset, self.model, self.validation_batch_size)
 
             for val_name, val_fnct in self.val_criterions.items():
                 val_losses[val_name] = self.val_loss_from_df(val_df, val_fnct)
@@ -473,28 +473,30 @@ class BasicRegressionPipeline(Pipeline):
         )
         self.model.eval()
 
-        data = self.collect_data(self.val_dataset, self.model)
-        y_true = data["y_true"]
-        y_pred = data["y_pred"]
+        with torch.no_grad():
+            data = self.collect_data(self.val_dataset, self.model, self.prediction_batch_size)
+            y_true = data["y_true"]
+            y_pred = data["y_pred"]
 
-        results = standard_regression_evaluation(
-            np.array(y_true), np.array(y_pred), self.name, 0, self.max_days
-        )
+            results = standard_regression_evaluation(
+                np.array(y_true), np.array(y_pred), self.name, 0, self.max_days
+            )
 
-        scores_path = os.path.join(self.output_dir, f"scores_{self.train_index}.json")
-        write_results(scores_path, results)
+            scores_path = os.path.join(self.output_dir, f"scores_{self.train_index}.json")
+            write_results(scores_path, results)
 
-        # Log css and MAE
-        css = compute_cumulative_scores(data)
-        mlflow.log_metrics(css)
-        mlflow.log_metric(
-            "test_mae", results[self.name][self.name + "_regression"][self.name + "_regression_mae"]
-        )
+            # Log css and MAE
+            css = compute_cumulative_scores(data)
+            mlflow.log_metrics(css)
+            mlflow.log_metric(
+                "test_mae",
+                results[self.name][self.name + "_regression"][self.name + "_regression_mae"],
+            )
 
-        # log.info("Performing inference per individual")
-        # self.predict_per_individual(self.val_dataset)
+            # log.info("Performing inference per individual")
+            # self.predict_per_individual(self.val_dataset)
 
-        return results[self.name][self.name + "_regression"][self.name + "_regression_mae"]
+            return results[self.name][self.name + "_regression"][self.name + "_regression_mae"]
 
     def init_parameters(self):
         super().init_parameters()

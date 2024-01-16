@@ -71,6 +71,8 @@ class Pipeline(object):
 
         self.learning_rate = self.config.training.learning_rate
         self.batch_size = self.config.training.batch_size
+        self.prediction_batch_size = self.config.training.prediction_batch_size
+        self.validation_batch_size = self.config.training.validation_batch_size
         self.epochs = self.config.training.epochs
         self.in_mem = self.config.dataset.in_memory
         self.resume = self.config.resume

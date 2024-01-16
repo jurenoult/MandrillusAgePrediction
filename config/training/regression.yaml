@@ -22,3 +22,6 @@ optimizer: lion
 max_workers: 0
 use_float16: False
 use_lr_scheduler: False
+
+prediction_batch_size: 64
+validation_batch_size: 128
