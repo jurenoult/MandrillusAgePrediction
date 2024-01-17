@@ -18,6 +18,12 @@ class Pipeline(object):
         torch.manual_seed(0)
         self.train_index = 0
 
+    def normalized_config(self, config):
+        import pandas as pd
+
+        df = pd.json_normalize(config, sep="_")
+        return df.to_dict(orient="records")[0]
+
     def set_config(self, config, output_dir):
         OmegaConf.resolve(config)
         self.config = config
@@ -35,6 +41,8 @@ class Pipeline(object):
             run_index = len(runs)
 
         self.mlflow_run = mlflow.start_run(run_name=f"{self.name}_{run_index}")
+        mlflow.log_params(self.normalized_config(self.config))
+
         mlflow.log_params(self.config)
         mlflow.log_param("learning_rate", self.config.training.learning_rate)
         mlflow.log_param("batch_size", self.config.training.batch_size)
