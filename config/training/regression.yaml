@@ -3,25 +3,25 @@ batch_size: 256
 epochs: 100
 reg_weight: 1.0
 train_backbone: True
-use_augmentation: True
+augmentation: True
 
 # Enable multi head
-use_similarity_augmentation: False
-use_similarity_head: False
+similarity_augmentation: False
+similarity_head: False
 sim_weight: 0.001
 
-use_face_quality_head: False
+face_quality_head: False
 face_quality_weight: 1.0
 
-use_sex_head: False
+sex_head: False
 sex_weight: 1.0
 
 backbone_checkpoint: null
 early_stopping_patience: 20
 optimizer: lion
 max_workers: 0
-use_float16: False
-use_lr_scheduler: False
+float16: False
+lr_scheduler: False
 
 prediction_batch_size: 64
 validation_batch_size: 128

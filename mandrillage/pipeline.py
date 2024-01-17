@@ -40,7 +40,7 @@ class Pipeline(object):
         mlflow.log_param("batch_size", self.config.training.batch_size)
         mlflow.log_param("epochs", self.config.training.epochs)
         mlflow.log_param("train_backbone", self.config.training.train_backbone)
-        mlflow.log_param("use_augmentation", self.config.training.use_augmentation)
+        mlflow.log_param("augmentation", self.config.training.augmentation)
         mlflow.log_param("backbone_target", self.config.backbone._target_)
         if "n_lin" in self.config.regression_head:
             mlflow.log_param("regression_head_stages", self.config.regression_head.n_lin)
@@ -175,7 +175,7 @@ class Pipeline(object):
         x = data.pop("input")
         x, y = self.xy_to_device(x, data, device)
 
-        if self.config.training.use_float16:
+        if self.config.training.float16:
             with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
                 losses = self.multihead_train_step(x, y, backbone, heads, criterions, weights)
         else:
@@ -275,7 +275,7 @@ class Pipeline(object):
         raise NotImplementedError()
 
     def optimize(self, loss, scaler):
-        if self.config.training.use_float16:
+        if self.config.training.float16:
             scaler.scale(loss).backward()
             scaler.step(self.optimizer)
             scaler.update()
@@ -346,7 +346,7 @@ class Pipeline(object):
         scaler = torch.cuda.amp.GradScaler()
 
         self.scheduler = None
-        if self.config.training.use_lr_scheduler:
+        if self.config.training.lr_scheduler:
             self.scheduler = torch.optim.lr_scheduler.CyclicLR(
                 self.optimizer,
                 base_lr=self.config.training.learning_rate * 0.01,

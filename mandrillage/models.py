@@ -308,12 +308,22 @@ class DinoV2(nn.Module):
         self.output_dim = 384
         if dino_type == "small":
             self.backbone = torch.hub.load("facebookresearch/dinov2", "dinov2_vits14")
+        if dino_type == "small_register":
+            self.backbone = torch.hub.load("facebookresearch/dinov2", "dinov2_vits14_reg")
         if dino_type == "medium":
             self.output_dim = 768
             self.backbone = torch.hub.load("facebookresearch/dinov2", "dinov2_vitb14")
+        if dino_type == "medium_register":
+            self.output_dim = 768
+            self.backbone = torch.hub.load("facebookresearch/dinov2", "dinov2_vitb14_reg")
         if dino_type == "large":
             self.output_dim = 1024
             self.backbone = torch.hub.load("facebookresearch/dinov2", "dinov2_vitl14")
+        if dino_type == "large_register":
+            self.output_dim = 1024
+            self.backbone = torch.hub.load(
+                "facebookresearch/dinov2", "dinov2_vitl14_reg", force_reload=True
+            )
 
     def features(self, x):
         return self.backbone(x)

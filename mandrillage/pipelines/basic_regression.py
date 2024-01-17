@@ -120,7 +120,7 @@ class BasicRegressionPipeline(Pipeline):
             normalize_y=self.config.dataset.normalize_y,
         )
 
-        if self.config.training.use_augmentation:
+        if self.config.training.augmentation:
             self.train_dataset = AugmentedDataset(self.train_dataset)
 
         self.train_similarity_dataset = MandrillSimilarityImageDataset(
@@ -134,7 +134,7 @@ class BasicRegressionPipeline(Pipeline):
         )
         self.train_similarity_dataset.set_images(self.train_dataset.images)
 
-        if self.config.training.use_similarity_augmentation:
+        if self.config.training.similarity_augmentation:
             self.train_similarity_dataset = AugmentedSimilarityDataset(
                 self.train_similarity_dataset
             )
@@ -190,17 +190,17 @@ class BasicRegressionPipeline(Pipeline):
         self.regression_head = hydra.utils.instantiate(self.config.regression_head)
         self.model = SequentialModel(backbone=self.backbone, head=self.regression_head)
 
-        if self.config.training.use_similarity_head:
+        if self.config.training.similarity_head:
             self.config.similarity_head.input_dim = self.backbone.output_dim
             self.sim_model = hydra.utils.instantiate(self.config.similarity_head)
             self.sim_model.backbone = self.backbone
 
-        if self.config.training.use_face_quality_head:
+        if self.config.training.face_quality_head:
             self.config.face_quality_head.input_dim = self.backbone.output_dim
             self.config.face_quality_head.n_classes = 3
             self.face_quality_head = hydra.utils.instantiate(self.config.face_quality_head)
 
-        if self.config.training.use_sex_head:
+        if self.config.training.sex_head:
             self.config.sex_head.input_dim = self.backbone.output_dim
             self.config.sex_head.n_classes = 2
             self.sex_head = hydra.utils.instantiate(self.config.sex_head)
