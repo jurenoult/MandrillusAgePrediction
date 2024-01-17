@@ -21,7 +21,7 @@ class Pipeline(object):
     def normalized_config(self, config):
         import pandas as pd
 
-        df = pd.json_normalize(config, sep="_")
+        df = pd.json_normalize(config, sep=".")
         return df.to_dict(orient="records")[0]
 
     def set_config(self, config, output_dir):
