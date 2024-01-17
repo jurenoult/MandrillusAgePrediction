@@ -11,8 +11,8 @@ dob_error_known: True
 max_dob_error: 15
 in_memory: True
 sex: null
-similarity_threshold:
-  - factor: 0.05
-  - min_days: 5
+# similarity_threshold:
+#   - factor: 0.05
+#   - min_days: 5
 normalize_y: False
 im_size: 224

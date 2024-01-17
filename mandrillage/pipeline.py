@@ -21,6 +21,7 @@ class Pipeline(object):
     def normalized_config(self, config):
         import pandas as pd
 
+        config = OmegaConf.to_container(config)
         df = pd.json_normalize(config, sep=".")
         return df.to_dict(orient="records")[0]
 
