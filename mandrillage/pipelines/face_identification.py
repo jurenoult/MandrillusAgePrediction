@@ -10,15 +10,13 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from torchmetrics.classification import Accuracy
 from mandrillage.dataset import (
     MandrillTripletDataset,
     read_dataset,
     filter_by_age
 )
-from mandrillage.evaluations import standard_classification_evaluation
 from mandrillage.pipeline import Pipeline
-from mandrillage.utils import load, save, softmax, DAYS_IN_YEAR
+from mandrillage.utils import load, save, DAYS_IN_YEAR
 
 log = logging.getLogger(__name__)
 
