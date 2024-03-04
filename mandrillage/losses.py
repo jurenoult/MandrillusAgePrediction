@@ -5,6 +5,23 @@ import torch.nn.functional as F
 
 from mandrillage.utils import DAYS_IN_YEAR
 
+class MSERescaled(nn.Module):
+    def __init__(self, gamma, max_age, min_weight=1e-3):
+        super(MSERescaled, self).__init__()
+        self.gamma = gamma
+        self.min_weight = torch.nn.Parameter(torch.tensor(min_weight))
+        self.max_age = max_age
+        self.mse_loss = nn.MSELoss()
+        
+    def get_weight(self, y_true):
+        w = (1.0 - (y_true / self.max_age))** self.gamma
+        w = torch.max(self.min_weight, w)
+        return w
+        
+    def forward(self, y_pred, y_true):
+        w = self.get_weight(y_true)
+        mse = self.mse_loss(y_pred, y_true)
+        return w * mse
 
 class MSEVariance(nn.Module):
     def __init__(self, sigma_weight=1.0, mse_weight=1.0):

@@ -1,14 +1,14 @@
 from matplotlib import pyplot as plt
 
 
-actual_max_age = 2*365
-max_age = 2*365
+actual_max_age = 4*365
+max_age = 4*365
 min_age = 0
 gamma = 2
 
 def get_weight_function(gamma, y_max):
     def weight(y):
-        return 1e-4 + (1.0 - (y/y_max))**gamma
+        return max(1e-4 , (1.0 - (y/y_max))**gamma)
     return weight
 
 def get_mse(y, y_true):
