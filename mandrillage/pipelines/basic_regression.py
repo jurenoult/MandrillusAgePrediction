@@ -1,42 +1,28 @@
-import os
 import logging
+import os
 
-import numpy as np
-import torch
-import torch.optim as optim
-from torch.utils.data import DataLoader
-from tqdm import tqdm
 import hydra
 import mlflow
+import numpy as np
 import pandas as pd
-
+import torch
+import torch.optim as optim
 from lion_pytorch import Lion
+from torch.utils.data import DataLoader
+from tqdm import tqdm
 
-from mandrillage.dataset import (
-    MandrillImageDataset,
-    read_dataset,
-    MandrillSimilarityImageDataset,
-    AugmentedDataset,
-    AugmentedSimilarityDataset,
-    filter_by_age,
-    filter_by_quality,
-    filter_by_faceview,
-)
-from mandrillage.evaluations import (
-    standard_regression_evaluation,
-    compute_cumulative_scores,
-    compute_std,
-)
+from mandrillage.dataset import (AugmentedDataset, AugmentedSimilarityDataset,
+                                 MandrillImageDataset,
+                                 MandrillSimilarityImageDataset, filter_by_age,
+                                 filter_by_faceview, filter_by_quality,
+                                 read_dataset)
+from mandrillage.display import display_worst_regression_cases
+from mandrillage.evaluations import (compute_cumulative_scores, compute_std,
+                                     standard_regression_evaluation)
 from mandrillage.models import SequentialModel
 from mandrillage.pipeline import Pipeline
-from mandrillage.display import display_worst_regression_cases
-from mandrillage.utils import (
-    load,
-    split_indices,
-    create_kfold_data,
-    DAYS_IN_YEAR,
-    write_results,
-)
+from mandrillage.utils import (DAYS_IN_YEAR, create_kfold_data, load,
+                               write_results)
 
 log = logging.getLogger(__name__)
 
