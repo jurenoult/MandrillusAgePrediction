@@ -51,12 +51,15 @@ class Pipeline(object):
         mlflow.log_param("train_backbone", self.config.training.train_backbone)
         mlflow.log_param("augmentation", self.config.training.augmentation)
         mlflow.log_param("backbone_target", self.config.backbone._target_)
-        if "n_lin" in self.config.regression_head:
-            mlflow.log_param("regression_head_stages", self.config.regression_head.n_lin)
-        if "lin_start" in self.config.regression_head:
-            mlflow.log_param("regression_head_start_neurons", self.config.regression_head.lin_start)
-        mlflow.log_param("train_loss_type", self.config.train_regression_loss._target_)
-        mlflow.log_param("val_loss_type", self.config.val_regression_loss._target_)
+        if self.config.get("regression_head"):
+            if "n_lin" in self.config.regression_head:
+                mlflow.log_param("regression_head_stages", self.config.regression_head.n_lin)
+            if "lin_start" in self.config.regression_head:
+                mlflow.log_param("regression_head_start_neurons", self.config.regression_head.lin_start)
+        if self.config.get("train_regression_loss"):
+            mlflow.log_param("train_loss_type", self.config.train_regression_loss._target_)
+        if self.config.get("val_regression_loss"):
+            mlflow.log_param("val_loss_type", self.config.val_regression_loss._target_)
 
     def init_parameters(self):
         self.train_max_age = self.config.dataset.train_max_age

@@ -6,6 +6,7 @@ pipeline:
 defaults:
   - override /models@backbone: dinov2.yaml
   - override /dataset: db2.yaml
+  - override /training: regression.yaml
 
 name: "face_id"
 train: True

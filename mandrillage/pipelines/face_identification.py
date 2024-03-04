@@ -14,10 +14,11 @@ from torchmetrics.classification import Accuracy
 from mandrillage.dataset import (
     MandrillTripletDataset,
     read_dataset,
+    filter_by_age
 )
 from mandrillage.evaluations import standard_classification_evaluation
 from mandrillage.pipeline import Pipeline
-from mandrillage.utils import load, save, softmax
+from mandrillage.utils import load, save, softmax, DAYS_IN_YEAR
 
 log = logging.getLogger(__name__)
 
@@ -49,6 +50,11 @@ class FaceIdentificationPipeline(Pipeline):
             sex=self.sex,
         )
 
+        self.data = filter_by_age(
+            self.data, age_in_days=self.train_max_age * DAYS_IN_YEAR
+        )
+        self.data.reset_index(drop=True, inplace=True)
+
         # Create dataset based on indices
         self.train_dataset = MandrillTripletDataset(
             root_dir=self.dataset_images_path,
@@ -58,6 +64,15 @@ class FaceIdentificationPipeline(Pipeline):
         )
 
         self.train_loader = self.make_dataloader(self.train_dataset, shuffle=True)
+
+    def init_logging(self):
+        pass
+
+    def init_callbacks(self):
+        pass
+
+    def init_loggers(self):
+        pass
 
     def init_model(self):
         self.backbone = hydra.utils.instantiate(self.config.backbone)
@@ -72,11 +87,11 @@ class FaceIdentificationPipeline(Pipeline):
         self.optimizer = optim.AdamW(self.model.parameters(), lr=self.learning_rate)
 
     def train_step(self, loader, model, criterion, device):
-        x1, x2, x3 = next(iter(loader))
+        x1, x2, x3 = next(iter(loader))["input"]
         x1, x2, x3 = x1.to(device), x2.to(device), x3.to(device)
         f1, f2, f3 = model(x1), model(x2), model(x3)
         loss = criterion(f1, f2, f3)
-        return loss
+        return loss, x1.size(0)
 
     def train(self):
         steps = len(self.train_loader)

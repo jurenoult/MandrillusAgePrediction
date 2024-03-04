@@ -653,7 +653,7 @@ class MandrillTripletDataset(MandrillImageDataset):
         in_mem=False,
         individuals_ids=[],
     ):
-        super(MandrillDualClassificationDataset, self).__init__(
+        super(MandrillTripletDataset, self).__init__(
             root_dir=root_dir,
             dataframe=dataframe,
             img_size=img_size,
@@ -664,27 +664,28 @@ class MandrillTripletDataset(MandrillImageDataset):
         
     def get_random_mandrill(self, candidates):
         selected_index = candidates[random.randint(0, len(candidates) - 1)]
-        x, y = self._getpair(selected_index)
-        return x, y
+        x = self._getpair(selected_index)["input"]
+        return x
 
     def __getitem__(self, idx):
         row = self.df.iloc[[idx]]
         cid = row["id"].values[0]
         
         # Reference mandrill
-        x1, y1 = self._getpair(idx)
+        data = self._getpair(idx)
+        x1 = data['input']
         
         # Get another photo of the same mandrill
         same_mandrill_candidates = self.df[self.df["id"] == cid].index
         if len(same_mandrill_candidates) == 0:
-            x2, y2 = x1, y1
+            x2 = x1
         else:
-            x2, y2 = self.get_random_mandrill(same_mandrill_candidates)
+            x2 = self.get_random_mandrill(same_mandrill_candidates)
         
         # Get a photo of another mandrill
         different_mandrill_candidates = self.df[self.df["id"] != cid].index
-        x3, y3 = self.get_random_mandrill(different_mandrill_candidates)        
-        return x1, x2, x3
+        x3 = self.get_random_mandrill(different_mandrill_candidates)        
+        return {'input': (x1, x2, x3)}
 
 class MandrillTripleImageDataset(MandrillImageDataset):
     def __init__(
