@@ -13,7 +13,7 @@ def display_worst_regression_cases(df, dataset, days_scale, output_dir, max_n, e
     # Make directories
     worst_cases_dir = os.path.join(output_dir, f"worst_{n}_cases")
     os.makedirs(worst_cases_dir, exist_ok=True)
-    epoch_worst_cases_dir = os.path.join(worst_cases_dir, f"{epoch}")
+    epoch_worst_cases_dir = os.path.join(worst_cases_dir, f"last")
     os.makedirs(epoch_worst_cases_dir, exist_ok=True)
 
     sorted_df = df.sort_values("error", ascending=False)
