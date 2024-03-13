@@ -358,13 +358,23 @@ class Pipeline(object):
         scaler = torch.cuda.amp.GradScaler()
 
         self.scheduler = None
-        if self.config.training.lr_scheduler:
-            self.scheduler = torch.optim.lr_scheduler.CyclicLR(
-                self.optimizer,
-                base_lr=self.config.training.learning_rate * 0.01,
-                max_lr=self.config.training.learning_rate,
-                cycle_momentum=False,
-            )
+        # if self.config.training.lr_scheduler:
+        steps_per_epoch = len(self.train_loader)
+        
+        self.scheduler = torch.optim.lr_scheduler.OneCycleLR(
+            self.optimizer,
+            max_lr=self.learning_rate*10,
+            steps_per_epoch=steps_per_epoch,
+            epochs=self.epochs,
+        )
+
+            
+            # self.scheduler = torch.optim.lr_scheduler.CyclicLR(
+            #     self.optimizer,
+            #     base_lr=self.config.training.learning_rate * 0.01,
+            #     max_lr=self.config.training.learning_rate,
+            #     cycle_momentum=False,
+            # )
 
         best_val = np.inf
         pbar = tqdm(range(self.epochs))
@@ -376,8 +386,8 @@ class Pipeline(object):
 
             mlflow.log_metric("best_val_loss", best_val, step=epoch)
 
-            if self.early_stopping(improved):
-                break
+            # if self.early_stopping(improved):
+            #     break
 
             # Print training and validation metrics
             val_str = " - ".join(
@@ -387,6 +397,7 @@ class Pipeline(object):
                 f"Epoch [{epoch+1}/{self.epochs}] - "
                 f"Train Loss: {train_loss:.5f} - "
                 f"{val_str}"
+                f" lr : {self.scheduler.get_last_lr()}"
             )
 
             # Save last iteration
