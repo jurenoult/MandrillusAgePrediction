@@ -244,9 +244,10 @@ class BasicRegressionPipeline(Pipeline):
             parameters += list(self.sim_model.parameters())
 
         if self.config.training.optimizer == "lion":
-            self.optimizer = Lion(parameters, lr=self.learning_rate, weight_decay=1e-2)
+            self.optimizer = Lion(parameters, lr=self.learning_rate, weight_decay=self.config.training.optimizer_weight_decay)
         elif self.config.training.optimizer == "adam":
-            self.optimizer = optim.AdamW(parameters, lr=self.learning_rate, weight_decay=1e-2)
+            self.optimizer = optim.AdamW(parameters, lr=self.learning_rate, weight_decay=self.config.training.optimizer_weight_decay)
+        
 
     def init_callbacks(self):
         pass
