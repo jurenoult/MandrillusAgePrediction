@@ -288,7 +288,7 @@ class BasicRegressionPipeline(Pipeline):
             prediction_stack.append(x)
             if len(prediction_stack) >= min_size_predict or i == n - 1:
                 prediction_stack = torch.stack(prediction_stack)
-                predictions = model(prediction_stack)
+                predictions = self.inference(model, prediction_stack)
 
                 for j in range(predictions.shape[0]):
                     prediction = predictions[j].detach().cpu()

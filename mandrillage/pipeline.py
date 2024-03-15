@@ -163,6 +163,13 @@ class Pipeline(object):
             size = x.size(0)
         return size
 
+    def inference(self, model, x):
+        if self.config.training.float16:
+            with torch.amp.autocast(device_type="cuda", dtype=torch.float16):
+                return model(x)
+        else:
+            return model(x)
+
     def multihead_train_step(self, x, y, backbone, heads, criterions, weights):
         backbone_features = backbone(x)
         losses = {}
