@@ -61,6 +61,17 @@ class BasicRegressionPipeline(Pipeline):
             max_dob_error=self.max_dob_error,
             sex=self.sex,
         )
+        
+        # print(self.data.columns)
+        # print(self.data["id"])
+        # print(self.banned_ids)
+        
+        # Remove banned ids
+        log.info(f"Number of samples before removing banned id: {len(self.data)}")
+        initial_data_len = len(self.data)
+        self.data = self.data[~self.data["id"].isin(self.banned_ids)]
+        self.data.reset_index(drop=True, inplace=True)
+        log.info(f"Removed {initial_data_len - len(self.data)} samples with total banned ids {len(self.banned_ids)}")
 
         # Make the split based on individual ids (cannot separate photos from the same id)
         self.train_indices, self.val_indices = create_kfold_data(
@@ -378,6 +389,11 @@ class BasicRegressionPipeline(Pipeline):
             )
 
             css = compute_cumulative_scores(val_df)
+            
+            # If using sex classification, measure validation on it
+            
+            # If using face quality classification, measure validation on it
+            
 
         val_losses["MSE"] = val_losses["MSE"] / (DAYS_IN_YEAR**2)
         val_loss = val_losses[self.watch_val_loss]

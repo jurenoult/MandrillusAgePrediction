@@ -16,3 +16,4 @@ sex: null
 #   - min_days: 5
 normalize_y: False
 im_size: 224
+banned_ids_paths: []

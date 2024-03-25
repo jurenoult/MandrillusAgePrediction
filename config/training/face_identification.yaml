@@ -6,5 +6,5 @@ backbone_checkpoint: null
 early_stopping_patience: 20
 optimizer: lion
 max_workers: 0
-float16: False
-lr_scheduler: False
+float16: True
+lr_scheduler: True

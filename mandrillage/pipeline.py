@@ -6,6 +6,7 @@ import torch
 from omegaconf import OmegaConf
 from tqdm import tqdm
 import mlflow
+import pandas as pd
 
 log = logging.getLogger(__name__)
 
@@ -78,6 +79,10 @@ class Pipeline(object):
         self.dataset_images_path = os.path.join(
             self.config.dataset.basepath, self.config.dataset.images
         )
+        self.banned_ids_paths = self.config.dataset.banned_ids_paths
+        self.banned_ids = []
+        if len(self.banned_ids_paths) > 0:
+            self.banned_ids = self.load_banned_ids(self.banned_ids_paths)
         self.sex = self.config.dataset.sex
         self.sex = None if self.sex == "" else self.sex
 
@@ -103,6 +108,20 @@ class Pipeline(object):
             self.name += f"_k:{self.config.kfold_index}"
 
         print(self.name)
+
+    def load_banned_ids(self, paths):
+        banned_ids = []
+        banned_photos = []
+        for path in paths:
+            data = pd.read_csv(path)
+            banned_photos = banned_photos + data.values.tolist()
+        
+        for _id in banned_photos:
+            real_id = _id[0].split("id")[1].split("_")[0]
+            if real_id not in banned_ids:
+                banned_ids.append(real_id)
+        
+        return banned_ids
 
     def init_datamodule(self):
         raise ValueError("You must subclass self.init_datamodule() method")
