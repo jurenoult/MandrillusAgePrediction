@@ -384,9 +384,9 @@ class BasicRegressionPipeline(Pipeline):
             # Add mean std per id per age
             val_losses["mean_std_by_id_by_age"] = np.mean(list(std_by_age_by_id.values()))
 
-            display_worst_regression_cases(
-                val_df, self.val_dataset, self.days_scale, self.output_dir, max_n=100, epoch=epoch
-            )
+            # display_worst_regression_cases(
+            #     val_df, self.val_dataset, self.days_scale, self.output_dir, max_n=100, epoch=epoch
+            # )
 
             css = compute_cumulative_scores(val_df)
             
