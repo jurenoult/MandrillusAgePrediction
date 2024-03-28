@@ -16,9 +16,9 @@ class xyz_model(torch.nn.Module):
         return ff
 
 
-def convert_dino_model(model_path, output_path, dino_type="small", device="gpu"):
+def convert_dino_model(model_path, output_path, dino_type="small"):
     # Load a default backbone model
-    baseline_backbone_model = DinoV2("small").to("cpu")
+    baseline_backbone_model = DinoV2(dino_type).to("cpu")
 
     # Load model
     model = torch.load(model_path).to("cpu")
