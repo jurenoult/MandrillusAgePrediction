@@ -80,6 +80,30 @@ class ConvNext(HuggingFaceModel):
         return x
 
 
+class MultiObjective(nn.Module):
+    def __init__(self, backbone, age_head, sex_head=None, quality_head=None):
+        super().__init__()
+        self.backbone = backbone
+        self.age_head = age_head
+        self.sex_head = sex_head
+        self.quality_head = quality_head
+        
+    def forward(self, x):
+        results = {}
+        features = self.backbone(x)
+        age = self.age_head(features)
+        results.update({"age": age})
+        
+        if self.sex_head is not None:
+            sex = self.sex_head(features)
+            results.update({"sex": sex})
+            
+        if self.quality_head is not None:
+            quality = self.quality_head(quality)
+            results.update({"quality": quality})
+
+        return results
+
 class SequentialModel(nn.Module):
     def __init__(self, backbone, head):
         super(SequentialModel, self).__init__()

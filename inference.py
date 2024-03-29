@@ -24,7 +24,7 @@ def inference(model, image):
     outputs = model.run(None, {"input": image})
     end_time = time.time()
     print(f"Inference time took: {(end_time - start_time):.3f} sec")
-    return outputs[0]
+    return outputs
 
 
 @click.command()
@@ -42,7 +42,7 @@ def main(model_path, image_path):
     model = load_model(model_path)
     image = io.imread(image_path)
     age = inference(model, image)
-    print(f"Predicted age: {age}")
+    print(f"Prediction : {age}")
 
 
 if __name__ == "__main__":

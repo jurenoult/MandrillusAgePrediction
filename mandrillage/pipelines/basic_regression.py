@@ -19,7 +19,7 @@ from mandrillage.dataset import (AugmentedDataset, AugmentedSimilarityDataset,
 from mandrillage.display import display_worst_regression_cases
 from mandrillage.evaluations import (compute_cumulative_scores, compute_std,
                                      standard_regression_evaluation)
-from mandrillage.models import SequentialModel
+from mandrillage.models import SequentialModel, MultiObjective
 from mandrillage.pipeline import Pipeline
 from mandrillage.utils import (DAYS_IN_YEAR, create_kfold_data, load,
                                write_results)
@@ -215,6 +215,10 @@ class BasicRegressionPipeline(Pipeline):
         if self.sex_head:
             self.sex_head = self.sex_head.to(self.device)
             self.heads["sex"] = self.sex_head
+            
+        # Define multihead model to be saved
+        self.global_model = MultiObjective(self.backbone, self.regression_head, self.sex_head, self.face_quality_head)
+        self.global_model = self.global_model.to(self.device)
 
     def init_losses(self):
         train_age_error_function = hydra.utils.instantiate(self.config.train_regression_loss)

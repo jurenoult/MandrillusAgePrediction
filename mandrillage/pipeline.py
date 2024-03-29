@@ -18,6 +18,7 @@ class Pipeline(object):
     def __init__(self) -> None:
         torch.manual_seed(0)
         self.train_index = 0
+        self.global_model = None
 
     def normalized_config(self, config):
         import pandas as pd
@@ -330,6 +331,14 @@ class Pipeline(object):
                 f"Val loss {self.watch_val_loss} improved from {best_val:.4f} to {val_loss:.4f}"
             )
             best_val = val_loss
+            if self.global_model is not None:
+                save(
+                    self.global_model,
+                    f"multi_{self.train_index}",
+                    exp_name=self.name,
+                    output_dir=self.output_dir,
+                )
+            
             save(
                 self.model,
                 f"regression_{self.train_index}",

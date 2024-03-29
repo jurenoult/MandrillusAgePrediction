@@ -22,9 +22,8 @@ def convert_dino_model(model_path, output_path, dino_type="small"):
 
     # Load model
     model = torch.load(model_path).to("cpu")
-
-    backbone_statedict = model.backbone.state_dict()
-    baseline_backbone_model.load_state_dict(backbone_statedict, strict=False)
+    backbone_statedict = model.backbone.state_dict()    
+    baseline_backbone_model.load_state_dict(backbone_statedict)
     model.backbone = baseline_backbone_model
 
     model.eval()
@@ -48,7 +47,7 @@ def convert_dino_model(model_path, output_path, dino_type="small"):
 @click.option(
     "--dino_type",
     required=False,
-    default="small",
+    default="large",
     help="Dino model type (small,medium,large)",
 )
 def main(model_path, export_path, dino_type):
