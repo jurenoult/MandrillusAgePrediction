@@ -1,0 +1,727 @@
+import pandas as pd
+import datetime
+import numpy as np
+import os
+from tqdm import tqdm
+import cv2
+import torch
+import random
+from enum import IntEnum
+
+from torch.utils.data import Dataset
+
+from mandrillage.utils import DAYS_IN_YEAR
+
+# Fix multithread spawning
+cv2.setNumThreads(0)
+
+CSV_ROWS = [
+    "photo_name",
+    "id",
+    "sex",
+    "dob",
+    "dob_estimated",
+    "error_dob",
+    "faceview",
+    "facequal",
+    "shootdate",
+]
+
+
+def csvdate_to_date(shoot_date):
+    year, month, day = shoot_date.split("/")
+    return datetime.date(int(year), int(month), int(day))
+
+
+def compute_age(row):
+    photo_date = csvdate_to_date(row["shootdate"])
+    dob_date = csvdate_to_date(row["dob"])
+    age = photo_date - dob_date
+    return age.days
+
+
+def add(row):
+    return row[0] + row[1] + row[2]
+
+
+def filter_by_age(data, age_in_days):
+    return data[data["age"] <= age_in_days]
+
+
+def filter_unknown_dob_errors(data):
+    return data[data["error_dob"] >= 0]
+
+
+def filter_by_certainty(data, max_dob_error):
+    return data[data["error_dob"] <= max_dob_error]
+
+
+def filter_by_quality(data, min_quality):
+    return data[data["face_qual"] >= min_quality]
+
+
+def filter_by_faceview(data, faceview_type):
+    return data[data["face_view"] == faceview_type]
+
+
+def filter_dob_errors(data):
+    return data[data["age"] >= 0]
+
+
+def filter_by_sex(data, sex):
+    return data[data["sex"] == sex]
+
+
+def read_dataset(
+    path,
+    filter_unknown_dob_error=False,
+    max_dob_error=0,
+    sex=None,
+):
+    data = pd.read_csv(
+        path,
+        dtype={
+            "ShootDate": str,
+            "shootdate": str,
+            "Shootdate": str,
+            "dob": str,
+        },
+    )
+    # All columns to lowercase
+    data.columns = data.columns.str.lower()
+
+    data = data.drop("pos_pic", axis=1)
+
+    data["shootdate"].replace("nan", np.nan, inplace=True)
+    data["shootdate"].replace("#N/D", np.nan, inplace=True)
+    data["dob"].replace("#N/D", np.nan, inplace=True)
+    # data["shootdate"].replace("", np.nan, inplace=True)
+    len_raw = len(data)
+    data = data.dropna()
+
+    data["age"] = data.apply(compute_age, axis=1)
+
+    if sex:
+        assert sex == "f" or sex == "m", "Expected sex to be either 'f' (female) or 'm' (male)"
+        data = filter_by_sex(data, sex)
+    # Filter all entries where the dob uncertainty is unknown (i.e. -1)
+    if filter_unknown_dob_error:
+        data = filter_unknown_dob_errors(data)
+
+    # Filter dob uncertainty that are above a certain threshold
+    data = filter_by_certainty(data, max_dob_error)
+
+    # Filter dob entries that are erronous
+    data = filter_dob_errors(data)
+
+    len_filter_errors = len(data)
+    print(f"Filtered #{len_filter_errors-len_raw} ({len_filter_errors}/{len_raw})")
+
+    print(f"Min age = {data['age'].min()}")
+    print(f"Max age = {data['age'].max()}")
+
+    data.reset_index(drop=True, inplace=True)
+    return data
+
+
+def resample(df, bins):
+    value_range = pd.cut(df["age"], bins)
+
+    # Count the occurrences of each value range
+    range_counts = value_range.value_counts()
+
+    # Find the minimum count among the value ranges
+    max_count = range_counts.max()
+
+    # Filter the DataFrame to have the same number of occurrences for each value range
+    filtered_df = df.groupby(value_range).apply(lambda x: x.sample(max_count, replace=True))
+
+    # Reset the index of the filtered DataFrame
+    filtered_df = filtered_df.reset_index(drop=True)
+    return filtered_df
+
+
+import albumentations as A
+
+AUGMENTATION_PIPELINE = A.Compose(
+    [
+        A.OneOf(
+            [
+                A.GaussianBlur(p=1.0),
+                A.GaussNoise(var_limit=(30, 50), mean=10, p=1.0),
+            ],
+            p=0.5,
+        ),
+        A.ShiftScaleRotate(
+            p=0.5,
+            shift_limit=0.05,
+            scale_limit=0.05,
+            rotate_limit=20,
+            border_mode=cv2.BORDER_CONSTANT,
+        ),
+        A.HueSaturationValue(hue_shift_limit=5, sat_shift_limit=40, p=0.5),
+        A.RandomGamma(gamma_limit=(50, 80), p=0.5),
+        A.RandomContrast(limit=0.4, p=0.5),
+        A.HorizontalFlip(p=0.5),
+    ],
+    p=0.5,
+)
+
+
+class AugmentedDataset(Dataset):
+    def __init__(self, subset):
+        self.subset = subset
+
+    def __len__(self):
+        return len(self.subset)
+
+    @property
+    def images(self):
+        return self.subset.images
+
+    def _augment(self, x):
+        # image = x.numpy()
+        image = x
+        if image.dtype == np.float32 or np.float16:
+            image = (image * 255).astype(np.uint8)
+        image = np.moveaxis(image, 0, -1)
+        image = AUGMENTATION_PIPELINE(image=image)["image"]
+        image = np.moveaxis(image, -1, 0)
+        image = image.astype(np.float32) / 255
+        return image
+
+    def __getitem__(self, idx):
+        data = self.subset._getpair(idx)
+        x = data["input"]
+        x = self._augment(x)
+        data["input"] = x
+        return data
+
+    def classes(self):
+        return self.subset.classes()
+
+    def get_metadata_at_index(self, i):
+        return self.subset.get_metadata_at_index(i)
+
+    def filter_by_age(self, max_age):
+        self.subset.filter_by_age(max_age)
+
+
+class AugmentedSimilarityDataset(AugmentedDataset):
+    def __init__(self, subset):
+        super(AugmentedSimilarityDataset, self).__init__(subset)
+
+    def __getitem__(self, idx):
+        x1, x2, y = self.subset[idx]
+        return self._augment(x1), self._augment(x2), y
+
+
+class Sampler:
+    def __init__(self, classes, class_per_batch, batch_size):
+        self.classes = classes
+        self.n_batches = sum([len(x) for x in classes]) // batch_size
+        self.class_per_batch = class_per_batch
+        self.batch_size = batch_size
+
+    def __iter__(self):
+        # Select the classes of the batch randomly
+        classes = random.sample(range(len(self.classes)), self.class_per_batch)
+
+        batches = []
+        for _ in range(self.n_batches):
+            batch = []
+            for i in range(self.batch_size):
+                # Select a class from the selected classes
+                klass = random.choice(classes)
+                # Randomly select element of the class
+                batch.append(random.choice(self.classes[klass]))
+            batches.append(batch)
+        return iter(batches)
+
+    def __len__(self):
+        return self.n_batches
+
+
+class MandrillImageDataset(Dataset):
+    def __init__(
+        self,
+        root_dir,
+        dataframe,
+        img_size=(224, 224),
+        in_mem=True,
+        max_days=1,
+        individuals_ids=[],
+        max_nbins=12,
+        training=False,
+        normalize_y=True,
+    ):
+        self.df = dataframe
+        self.root_dir = root_dir
+        self.img_size = img_size
+        self.in_mem = in_mem
+        self.max_days = max_days
+        self.max_nbins = max_nbins
+        self.training = training
+        self.normalize_y = normalize_y
+
+        if len(individuals_ids) != 0:
+            #     print("No individuals data specified, using all dataset")
+            #     raise NotImplementedError
+            # else:
+            # Filter dataframe with id array
+            self.df = self.df[self.df["id"].isin(individuals_ids)]
+            self.df.reset_index(drop=True, inplace=True)
+
+        self.data_classes = {}
+        if self.in_mem:
+            self.images = []
+
+            parameters = [(self.df.iloc[[i]], i) for i in range(len(self.df))]
+            from tqdm.contrib.concurrent import process_map
+
+            unsorted_images = process_map(
+                self.load_photo_with_id,
+                parameters,
+                total=len(parameters),
+                chunksize=64,
+            )
+            # print(unsorted_images)
+            sorted_images = sorted(unsorted_images, key=lambda x: x[1], reverse=False)
+            # print(sorted_images)
+            self.images = [x for x, _ in sorted_images]
+            # print(images[:1])
+            # for i in tqdm(range(len(self.df))):
+            #     row = self.df.iloc[[i]]
+            #     self.images.append(self.load_photo(row))
+            # age = row["age"].values[0]
+            # _id = row["id"]
+
+            # by age & by id
+            # age_id = f"{_id}_{age}"
+
+            # if age_id not in self.data_classes:
+            #     self.data_classes[age_id] = []
+
+            # self.data_classes[age_id].append(i)
+            # print(self.images[:1])
+
+        self.full_df = self.df.copy()
+
+    def load_photo_with_id(self, *args):
+        row, id = args[0]
+        return self.load_photo(row), id
+
+    def filter_by_age(self, max_age):
+        max_age_days = int(max_age * DAYS_IN_YEAR)
+        self.df = self.full_df[self.full_df["age"] <= max_age_days]
+
+    def partition_by_age(self):
+        # Split the max days into n_bins
+        days_step = self.max_days / self.max_nbins
+        # Init classes
+        self.age_partitions = [[] for _ in range(self.max_nbins)]
+        for i in tqdm(range(len(self.df))):
+            row = self.df.iloc[[i]]
+            # get current age
+            age = row["age"].values[0]
+            # Find which interval the age fits in
+            age_index = int(age // days_step)
+            self.age_partitions[age_index].append(i)
+
+        # Filter empty bins
+        self.age_partitions = [v for v in self.age_partitions if len(v) > 0]
+        print(f"Partitionned data into {len(self.age_partitions)} partitions")
+        print(
+            f"Partitions size distribution: {', '.join([str(len(x)) for x in self.age_partitions])}"
+        )
+
+    def load_photo(self, row, normalize=True):
+        image_path = self.photo_path(row)
+        image = cv2.imread(image_path)
+        if image.shape[0:2] != self.img_size:
+            image = cv2.resize(image, self.img_size, interpolation=cv2.INTER_AREA)
+
+        # Normalization
+        if normalize:
+            image = image.astype(np.float32) / 255.0
+            # image = (image - image.min()) / image.ptp()
+
+        return image.astype(np.float16)
+
+    def value_to_str(self, value):
+        if not isinstance(value, str):
+            return value.values[0]
+        return value
+
+    def photo_path(self, row):
+        photo_path = self.photo_path_native(row)
+        path = os.path.join(self.root_dir, photo_path)
+        return path
+
+    def photo_path_native(self, row):
+        path = ""
+        if "parent_folder" in row:
+            path = os.path.join(path, self.value_to_str(row["parent_folder"]))
+        path = os.path.join(path, f"{self.value_to_str(row['id'])}")
+        path = os.path.join(path, f"{self.value_to_str(row['photo_name'])}")
+        return path
+
+    def value_to_str(self, value):
+        if not isinstance(value, str):
+            return value.values[0]
+        return value
+
+    def __len__(self):
+        return len(self.df)
+
+    def _getpair_from_row(self, row, idx=-1):
+        target = row["age"]
+        if not isinstance(target, int):
+            target = float(row["age"].values[0])
+        if self.max_days > 0:
+            if self.normalize_y:
+                target = target / self.max_days
+            else:
+                target = float(target) / float(DAYS_IN_YEAR)
+
+        if self.in_mem and idx >= 0:
+            image = self.images[idx]
+        else:
+            image = self.load_photo(row)
+
+        image = np.moveaxis(image, -1, 0).astype(np.float32)  # Channel first format
+
+        sex_index = 0 if row["sex"].values[0] == "m" else 1
+        sex_tensor = np.zeros(2)
+        sex_tensor[sex_index] = 1.0
+
+        face_quality = row["face_qual"].values[0]
+        face_quality_tensor = np.zeros(3)
+        face_quality_tensor[face_quality - 1] = 1.0
+
+        return {
+            "input": image,
+            "age": float(target),
+            "face_quality": face_quality_tensor,
+            "sex": sex_tensor,
+        }
+
+    def _getpair(self, idx):
+        # All datas for this mandrill
+        row = self.df.iloc[[idx]]
+        return self._getpair_from_row(row, idx)
+
+    def get_metadata_at_index(self, idx):
+        row = self.df.iloc[[idx]]
+        photo_path = self.photo_path_native(row).replace("/", "_")
+        return {
+            "id": self.value_to_str(row["id"]),
+            "age": self.value_to_str(row["age"]),
+            "photo_path": photo_path,
+        }
+
+    def set_images(self, images):
+        self.images = images
+        self.in_mem = True
+
+    def __getitem__(self, idx):
+        # if self.training:
+        #     partition_index = idx % len(self.age_partitions)
+        #     idx = random.choice(self.age_partitions[partition_index])
+        # x, y = self._getpair(idx)
+        # return torch.tensor(x), torch.tensor(y)
+        data = self._getpair(idx)
+        return data
+
+    def classes(self):
+        return list(self.data_classes.values())
+
+
+class MandrillSimilarityImageDataset(MandrillImageDataset):
+    def __init__(
+        self,
+        root_dir,
+        dataframe,
+        img_size=(224, 224),
+        in_mem=True,
+        max_days=1,
+        similarity_threshold=None,
+        individuals_ids=[],
+        max_nbins=12,
+        training=False,
+        normalize_y=True,
+    ):
+        super(MandrillSimilarityImageDataset, self).__init__(
+            root_dir,
+            dataframe,
+            img_size,
+            in_mem,
+            max_days,
+            individuals_ids,
+            max_nbins,
+            training,
+            normalize_y,
+        )
+        self.ids = individuals_ids
+
+        self.valid_id_date = {}
+        valid_frames = self.df.groupby(["id", "age"])
+        valid_frames = valid_frames.filter(lambda x: len(x) > 0)
+
+        for i, row in valid_frames.iterrows():
+            _id = row["id"]
+            if _id not in self.valid_id_date:
+                self.valid_id_date[_id] = []
+            age = row["age"]
+            if age not in self.valid_id_date[_id]:
+                self.valid_id_date[_id].append(age)
+
+        self.similarity_threshold = similarity_threshold
+
+    def take_random(self, array):
+        idx = random.randint(0, len(array) - 1)
+        return array.pop(idx)
+
+    def extract_from_df(self, cond):
+        return list(self.df[cond].index)
+
+    def get_photo_pair(self, idx, age, is_same_mandrill, is_same_age):
+        # Get a random photo with idx and age
+        candidates = self.extract_from_df((self.df["id"] == idx) & (self.df["age"] == age))
+        # Get a photo from the list and remove it from the list of candidates
+        x1 = self.take_random(candidates)
+
+        if is_same_mandrill:
+            if is_same_age:  # Same mandrill same age
+                if len(candidates) == 0:
+                    is_same_age = False
+                else:
+                    x2 = self.take_random(candidates)
+
+            if not is_same_age:
+                candidates = self.extract_from_df((self.df["id"] == idx) & (self.df["age"] != age))
+                # If there is only one age for this mandrill
+                # We must choose another mandrill
+                if len(candidates) == 0:
+                    is_same_mandrill = False
+                else:  # Same mandrill diff age
+                    x2 = self.take_random(candidates)
+
+        if not is_same_mandrill:
+            if is_same_age:
+                candidates = self.extract_from_df((self.df["id"] != idx) & (self.df["age"] == age))
+                # If there are no other mandrill with same age
+                if len(candidates) == 0:
+                    is_same_age = False
+                else:  # Diff mandrills same age
+                    x2 = self.take_random(candidates)
+
+            if not is_same_age:  # Diff mandrills diff age
+                candidates = self.extract_from_df((self.df["id"] != idx) & (self.df["age"] != age))
+                x2 = self.take_random(candidates)
+
+        return x1, x2
+
+    def __len__(self):
+        return len(self.valid_id_date)
+
+    def compute_is_same_age(self, y1, y2):
+        age_distance = abs(y1 - y2)
+        if self.similarity_threshold is None:
+            return age_distance < 1e-6
+
+        # Get the threshold for each age
+        y1_threshold = self.similarity_threshold.factor * y1
+        y2_threshold = self.similarity_threshold.factor * y2
+        # Take the max
+        max_threshold = max(y1_threshold, y2_threshold)
+        threshold = min(max_threshold, self.similarity_threshold.min_days / self.max_days)
+
+        return age_distance < threshold
+
+    def __getitem__(self, idx):
+        _id = list(self.valid_id_date.keys())[idx]
+
+        # is_same_mandrill = np.random.choice([True, False])
+        is_same_mandrill = True  # Force same mandrill
+        is_same_age = np.random.choice([True, False])
+
+        ages = self.valid_id_date[_id]
+        age = ages[random.randint(0, len(ages) - 1)]
+
+        # This is an attempt at same mandrill & same age bool values
+        # However not all cases exist and we have to consider what samples
+        # have been taken to update whether the two photo have the same age or not
+        id1, id2 = self.get_photo_pair(_id, age, is_same_mandrill, is_same_age)
+        data1 = self._getpair(id1)
+        x1, y1 = data1["input"], data1["age"]
+
+        data2 = self._getpair(id2)
+        x2, y2 = data2["input"], data2["age"]
+
+        # Update the bool value based on what samples were drawn
+        is_same_age = self.compute_is_same_age(y1, y2)
+
+        # Only binary
+        y = torch.zeros([2])
+        y_index = 1 if is_same_age else 0
+        y[y_index] = 1
+
+        return x1, x2, y
+
+
+class ClassificationMandrillImageDataset(MandrillImageDataset):
+    def __init__(
+        self,
+        root_dir,
+        dataframe,
+        img_size=(224, 224),
+        in_mem=True,
+        n_classes=2,
+        days_step=DAYS_IN_YEAR,
+        individuals_ids=[],
+        return_integer=False,
+    ):
+        super(ClassificationMandrillImageDataset, self).__init__(
+            root_dir=root_dir,
+            dataframe=dataframe,
+            img_size=img_size,
+            in_mem=in_mem,
+            max_days=1,
+            individuals_ids=individuals_ids,
+        )
+        self.days_step = days_step
+        self.n_classes = n_classes
+        self.return_integer = return_integer
+
+    def to_class(self, age):
+        y_c = age / self.days_step
+        y_c = max(0, np.ceil(y_c.numpy()) - 1)
+        return int(y_c)
+
+    def __getitem__(self, idx):
+        x, age = self._getpair(idx)
+
+        y_c = self.to_class(age)
+
+        if self.return_integer:
+            return x, y_c
+
+        y = torch.zeros([self.n_classes])
+        y[int(y_c)] = 1
+
+        return x, y
+
+
+class MandrillDualClassificationDataset(MandrillImageDataset):
+    def __init__(
+        self, root_dir, dataframe, img_size=(224, 224), device="cuda", in_mem=False, max_days=0
+    ):
+        super(MandrillDualClassificationDataset, self).__init__(
+            root_dir=root_dir,
+            dataframe=dataframe,
+            img_size=img_size,
+            in_mem=in_mem,
+            max_days=max_days,
+            individuals_ids=individuals_ids,
+        )
+
+    def __getitem__(self, idx):
+        # Randomize
+        idx = random.randint(0, len(self) - 1)
+        x1, y1 = self._getpair(idx)
+
+        second_idx = random.randint(0, len(self) - 1)
+        x2, y2 = self._getpair(second_idx)
+
+        # Don't allow same age mandrill comparison
+        while y1 - y2 == 0:
+            second_idx = random.randint(0, len(self) - 1)
+            x2, y2 = self._getpair(second_idx)
+
+        sign = torch.sign(y1 - y2)
+        y = torch.zeros([3])
+        y[int(sign) + 1] = 1
+        return [x1, x2], y
+
+class MandrillTripletDataset(MandrillImageDataset):
+    def __init__(
+        self,
+        root_dir,
+        dataframe,
+        img_size=(224, 224),
+        in_mem=False,
+        individuals_ids=[],
+    ):
+        super(MandrillTripletDataset, self).__init__(
+            root_dir=root_dir,
+            dataframe=dataframe,
+            img_size=img_size,
+            in_mem=in_mem,
+            max_days=np.inf,
+            individuals_ids=individuals_ids,
+        )
+        
+    def get_random_mandrill(self, candidates):
+        selected_index = candidates[random.randint(0, len(candidates) - 1)]
+        x = self._getpair(selected_index)["input"]
+        return x
+
+    def __getitem__(self, idx):
+        row = self.df.iloc[[idx]]
+        cid = row["id"].values[0]
+        
+        # Reference mandrill
+        data = self._getpair(idx)
+        x1 = data['input']
+        
+        # Get another photo of the same mandrill
+        same_mandrill_candidates = self.df[self.df["id"] == cid].index
+        if len(same_mandrill_candidates) == 0:
+            x2 = x1
+        else:
+            x2 = self.get_random_mandrill(same_mandrill_candidates)
+        
+        # Get a photo of another mandrill
+        different_mandrill_candidates = self.df[self.df["id"] != cid].index
+        x3 = self.get_random_mandrill(different_mandrill_candidates)        
+        return {'input': (x1, x2, x3)}
+
+class MandrillTripleImageDataset(MandrillImageDataset):
+    def __init__(
+        self, root_dir, dataframe, img_size=(224, 224), device="cuda", in_mem=False, max_days=0, individuals_ids=None
+    ):
+        super(MandrillTripleImageDataset, self).__init__(
+            root_dir=root_dir,
+            dataframe=dataframe,
+            img_size=img_size,
+            in_mem=in_mem,
+            max_days=max_days,
+            individuals_ids=individuals_ids,
+        )
+
+    def compute_margin(self, y):
+        y1, y2, y3 = y
+        d1 = abs(y1 - y2)
+        d2 = abs(y1 - y3)
+        m = abs(d1 - d2)
+        return m
+
+    def __getitem__(self, idx):
+        # Get three random idx
+        idx2 = random.randint(0, len(self) - 1)
+        idx3 = random.randint(0, len(self) - 1)
+        x1, y1 = self._getpair(idx)
+        x2, y2 = self._getpair(idx2)
+        x3, y3 = self._getpair(idx3)
+
+        y2y1 = abs(y1 - y2)
+        y3y1 = abs(y1 - y3)
+
+        if y2y1 > y3y1:
+            triplet = ((x1, x3, x2), (y1, y3, y2))
+        else:
+            triplet = ((x1, x2, x3), (y1, y2, y3))
+        x, y = triplet
+        margin = self.compute_margin(y)
+        return x, margin

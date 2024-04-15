@@ -1,0 +1,4 @@
+_target_: mandrillage.losses.MSERescaled
+gamma: 2
+max_age: ${dataset.train_max_age}
+min_weight: 0.001

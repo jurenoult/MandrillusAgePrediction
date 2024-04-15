@@ -1,0 +1,24 @@
+# @package _global_
+
+defaults:
+  - _self_
+  - log_dir: default.yaml
+  - hparams_search: null
+  - dataset: null
+  - training: null
+  - models@backbone: null
+  - models@regression_head: null
+  - models@similarity_head: null
+  - models@sex_head: null
+  - models@face_quality_head: null
+  - losses@train_regression_loss: null
+  - losses@val_regression_loss: null
+  - losses@train_similarity_loss: null
+  - losses@face_quality_loss: null
+  - losses@sex_loss: null
+
+  # SHOULD BE LAST
+  - experiment: null
+
+name: null
+date: ${now:%Y-%m-%d}_${now:%H-%M-%S}

@@ -1,0 +1,11 @@
+_target_: mandrillage.models.RegressionHead
+# Number of dense neurons at first layer
+lin_start: 256
+# Number of stages in the regression head.
+# Each stage divides the number of neurons by two
+n_lin: 0
+input_dim: 1
+output_dim: 1
+sigmoid: False
+dropout: 0.0
+use_norm: False

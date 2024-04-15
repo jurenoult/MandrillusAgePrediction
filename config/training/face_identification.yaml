@@ -1,0 +1,10 @@
+learning_rate: 0.000001
+batch_size: 256
+epochs: 100
+
+backbone_checkpoint: null
+early_stopping_patience: 20
+optimizer: lion
+max_workers: 0
+float16: True
+lr_scheduler: True

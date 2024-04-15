@@ -1,0 +1,20 @@
+# @package _global_
+
+pipeline:
+  _target_: mandrillage.pipelines.face_identification.FaceIdentificationPipeline
+
+defaults:
+  - override /models@backbone: dinov2.yaml
+  - override /dataset: db2.yaml
+  - override /training: regression.yaml
+
+name: "face_id"
+train: True
+test: False
+resume: False
+kfold: 5
+kfold_index: 0
+profile: False
+
+dataset:
+  train_max_age: 1000

@@ -1,0 +1,7 @@
+_target_: mandrillage.models.SimilarityClassificationHead
+input_dim: 1024
+n_classes: 2
+lin_start: 256
+n_lin: 0
+n_input: 2
+use_concat: true
