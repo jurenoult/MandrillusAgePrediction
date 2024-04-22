@@ -96,10 +96,12 @@ class MultiObjective(nn.Module):
         
         if self.sex_head is not None:
             sex = self.sex_head(features)
+            sex = F.softmax(sex)
             results.update({"sex": sex})
             
         if self.quality_head is not None:
-            quality = self.quality_head(quality)
+            quality = self.quality_head(features)
+            quality = F.softmax(quality)
             results.update({"quality": quality})
 
         return results

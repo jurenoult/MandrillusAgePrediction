@@ -22,7 +22,7 @@ def convert_dino_model(model_path, output_path, dino_type="small"):
 
     # Load model
     model = torch.load(model_path).to("cpu")
-    backbone_statedict = model.backbone.state_dict()    
+    backbone_statedict = model.backbone.state_dict()
     baseline_backbone_model.load_state_dict(backbone_statedict)
     model.backbone = baseline_backbone_model
 
