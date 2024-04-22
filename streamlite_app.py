@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from skimage import io
 from json import JSONEncoder
 import json
 import pandas as pd
@@ -11,6 +12,8 @@ import shutil
 import subprocess
 import onnx
 from onnx import numpy_helper
+from inference import preprocess, load_model, inference
+import time
 
 INPUT_EXTENSIONS = ("jpg", "jpeg", "png", "ppm", "bmp", "pgm", "tif", "tiff", "webp")
 PATH_MODEL = os.path.join(os.getcwd(), "model/")  # Folder to find prediction model
@@ -83,14 +86,14 @@ def get_info_model(modele):
 
 
 # run prediction on a image with the model in parameters; return prediction's text
-def get_inference(modele, image):
+def get_inference(modele, path_image):
     # info_model = {'nom': modele}
     # inference = requests.get("http://localhost:5000/api/prediction", files=image, json=info_model).json()
     # return st.text('\n'.join(inference.split('\n')))
-    command = ["python3", 'inference.py', f'--model_path=model/{modele}', f'--image_path={image}']
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
-    stdout, stderr = process.communicate()
-    return st.text('\n'.join(stdout.split('\n')[1:][:-1]))
+    model = load_model('model/'+modele)
+    image = io.imread(path_image)
+    age = inference(model, image).tolist()
+    return st.text(age)
 
 
 # run prediction on multiple image with the model in parameters and return a dataframe
@@ -100,13 +103,15 @@ def get_inference_multiple(model_select, list_path):
     listprediction = []
 
     for img in list_path:
-        command = ["python3", 'inference.py', f'--model_path=model/{model_select}', f'--image_path={img}']
-        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
-        stdout, stderr = process.communicate()
+        start_time = time.time()
+        model = load_model('model/' + model_select)
+        image = io.imread(img)
+        age = inference(model, image).tolist()
+        end_time = time.time()
+        time_exec = f"Inference time took: {(end_time - start_time):.3f} sec"
         listimage.append(img)
-        listime.append(stdout.split('\n')[1:2][0].split(':')[-1])
-        listprediction.append(stdout.split('\n')[2:][0].split(':')[-1])
-
+        listime.append(time_exec)
+        listprediction.append(age)
     df = pd.DataFrame({'Image': listimage, 'Time': listime, 'Prediction': listprediction})
     return df
 
@@ -129,7 +134,6 @@ def get_liste_model():
     for file in os.listdir(PATH_MODEL):
         filename = os.fsdecode(file)
         if filename.endswith(".onnx"):
-            print(list_model)
             list_model.append(file)
     return list_model
 
@@ -203,11 +207,13 @@ if rad == '🐒 Single Prediction':
             for i in range(len(pic_names)):  # Iterating over each file name
                 name = pic_names[i]  # Getting the name of current file
                 path = './' + pic_names[i]  # Creating path string which is basically ["./image.jpg"]
-                test = image_file.getvalue()
-                # print(test)
             colT2.image(path, channels="BGR")
             if st.button("Prédire l'age", type="primary"):
+                start_time = time.time()
                 inference = get_inference(model_select, path)
+                end_time = time.time()
+                time_exec = f"Inference time took: {(end_time - start_time):.3f} sec"
+                st.write(time_exec)
 
 if rad == '🐒 🐒 Multi Prediction':
     df_csv = None
