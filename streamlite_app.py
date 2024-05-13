@@ -7,20 +7,14 @@ import numpy as np
 import streamlit as st
 import os
 from PIL import Image
-import cv2
 import shutil
-import subprocess
 import onnx
 from onnx import numpy_helper
-from inference import preprocess, load_model, inference
+from inference import load_model, inference
 import time
 
 INPUT_EXTENSIONS = ("jpg", "jpeg", "png", "ppm", "bmp", "pgm", "tif", "tiff", "webp")
 PATH_MODEL = os.path.join(os.getcwd(), "model/")  # Folder to find prediction model
-
-
-def to_img_pil(img_open_cv):
-    return Image.fromarray(cv2.cvtColor(img_open_cv, cv2.COLOR_BGR2RGB))
 
 
 def load_image(image_file):
@@ -92,37 +86,24 @@ def get_inference(modele, path_image):
     # return st.text('\n'.join(inference.split('\n')))
     model = load_model('model/'+modele)
     image = io.imread(path_image)
-    age = inference(model, image).tolist()
-    return st.text(age)
+    age = inference(model, image)
+    return st.json(age)
+    # return age
 
 
 # run prediction on multiple image with the model in parameters and return a dataframe
 def get_inference_multiple(model_select, list_path):
-    listimage = []
-    listime = []
-    listprediction = []
+    predictions = {}
 
+    model = load_model('model/' + model_select)
     for img in list_path:
-        start_time = time.time()
-        model = load_model('model/' + model_select)
         image = io.imread(img)
-        age = inference(model, image).tolist()
-        end_time = time.time()
-        time_exec = f"Inference time took: {(end_time - start_time):.3f} sec"
-        listimage.append(img)
-        listime.append(time_exec)
-        listprediction.append(age)
-    df = pd.DataFrame({'Image': listimage, 'Time': listime, 'Prediction': listprediction})
-    return df
+        age = inference(model, image)
+        predictions[img] = age
+    return predictions
 
 
 #######################################################################################
-
-
-# Convert a Dataframe in csv to download
-@st.cache_data
-def convert_df(df):
-    return df.to_csv(index=False).encode('utf-8')
 
 # Get list of model found in variable PATH_MODEL.
 @st.cache_data
@@ -203,12 +184,11 @@ if rad == '🐒 Single Prediction':
             pic_names.append(image_file.name)  # Append the name of image to the list
             image_result.close()  # Close the file pointer
             file_bytes = np.asarray(bytearray(image_file.read()), dtype=np.uint8)
-            # opencv_image = cv2.imdecode(file_bytes, 1)
             for i in range(len(pic_names)):  # Iterating over each file name
                 name = pic_names[i]  # Getting the name of current file
                 path = './' + pic_names[i]  # Creating path string which is basically ["./image.jpg"]
             colT2.image(path, channels="BGR")
-            if st.button("Prédire l'age", type="primary"):
+            if st.button("Prédire", type="primary"):
                 start_time = time.time()
                 inference = get_inference(model_select, path)
                 end_time = time.time()
@@ -216,7 +196,7 @@ if rad == '🐒 Single Prediction':
                 st.write(time_exec)
 
 if rad == '🐒 🐒 Multi Prediction':
-    df_csv = None
+    json_data = None
     colT1, colT2 = st.columns([1, 3])
     with colT2:
         image_file = button_image(multiple=True)
@@ -236,13 +216,13 @@ if rad == '🐒 🐒 Multi Prediction':
                 list_path.append(path)
                 test = uploaded_img.getvalue()
                 colT2.image(path, channels="BGR") # Comment this line to desactivate visualisation
-            if st.button("Générer les résultat", type="primary"):
-                df_csv = get_inference_multiple(model_select, list_path)
+            if st.button("Prédire", type="primary"):
+                json_data = get_inference_multiple(model_select, list_path)
 
-            if df_csv is not None:
-                csv = convert_df(df_csv)
-                st.download_button(label="Téléchargez", data=csv, file_name=f'prediction_{model_select}.csv',
-                                   mime='text/csv', key='download-csv')
+            if json_data is not None:
+                st.download_button(label="Téléchargez", data=json.dumps(json_data), file_name=f'prediction_{model_select}.json',
+                                   mime='application/json', key='download-json')
+                st.json(json_data)
 
 if rad == '🔎 Informations du modèle':
     with eda:

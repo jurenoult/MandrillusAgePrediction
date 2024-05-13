@@ -28,13 +28,13 @@ def inference(model, image):
     outputs_d = {}
     if len(outputs) == 1: # May be either age or face id vector
         if outputs[0].ndim > 1: # face id
-            outputs_d["face_id_vector"] = outputs[0][0]
+            outputs_d["face_id_vector"] = outputs[0][0].tolist()
         else:
             outputs_d["age"] = outputs[0]
     else: # Multi objective (age, sex, quality)
-        outputs_d["age"] = outputs[0]
-        outputs_d["sex"] = outputs[1]
-        outputs_d["quality"] = outputs[2]
+        outputs_d["age"] = outputs[0][0].tolist()
+        outputs_d["sex"] = outputs[1].tolist()
+        outputs_d["quality"] = outputs[2].tolist()
     return outputs_d
 
 def find_images(folder, types=["tif","png", "jpg", "jpeg"]):
