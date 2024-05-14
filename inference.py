@@ -30,7 +30,7 @@ def inference(model, image):
         if outputs[0].ndim > 1: # face id
             outputs_d["face_id_vector"] = outputs[0][0].tolist()
         else:
-            outputs_d["age"] = outputs[0]
+            outputs_d["age"] = outputs[0].tolist()
     else: # Multi objective (age, sex, quality)
         outputs_d["age"] = outputs[0][0].tolist()
         outputs_d["sex"] = outputs[1].tolist()
