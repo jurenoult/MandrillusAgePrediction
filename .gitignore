@@ -10,3 +10,4 @@ train_margin.png
 val_margin.png
 mlruns
 .vscode
+lightning_logs
