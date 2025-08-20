@@ -59,7 +59,7 @@ class SegmentationLightningModule(pl.LightningModule):
 
         mask_np = mask.detach().cpu().numpy()
         pred_np = pred.detach().cpu().numpy()
-        logits = logits.squeeze().detach().cpu().numpy()
+        logits = logits.squeeze().detach().to(torch.float16).cpu().numpy()
 
         fig, axs = plt.subplots(1, 5, figsize=(12, 4))
         axs[0].imshow(img_np)
