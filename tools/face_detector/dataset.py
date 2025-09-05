@@ -67,8 +67,10 @@ class SAM2LikeTransform:
             ]
         )
 
-    def __call__(self, img, mask):
+    def __call__(self, img, mask=None):
         img = self.img_transform(img)
+        if mask is None:
+            return img
         mask = self.mask_transform(mask)
         mask = np.array(mask) / 255.0
         mask = torch.as_tensor(mask, dtype=torch.int64)
