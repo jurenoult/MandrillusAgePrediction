@@ -173,14 +173,14 @@ def load_model(model_path, device, dino_type="small"):
 
 
 def load_image(im_path, device, im_size=(224, 224)):
-    im = io.imread(im_path)
+    im = cv2.imread(im_path)
 
     # Make sure the image is 224, 224
     if im.shape[0:2] != im_size:
         im = cv2.resize(im, im_size, interpolation=cv2.INTER_AREA)
 
     # Normalize image to range [0, 1]
-    std_im = (im / 255.0).astype(np.float16)
+    std_im = (im / 255.0).astype(np.float32)
 
     # Create a torch tensor
     input_data = torch.from_numpy(std_im).unsqueeze(dim=0)

@@ -1,6 +1,8 @@
 import os
 import time
+import torch
 from pathlib import Path
+import cv2
 
 import click
 import numpy as np
@@ -42,11 +44,6 @@ def foreground_contribution_ratio(attribution, binary_mask):
     help="Path to the foreground/background segmentation folder.",
 )
 @click.option(
-    "--im_folder",
-    required=True,
-    help="Path to the source image folder.",
-)
-@click.option(
     "--csv_data",
     required=True,
     help="Path to the result csv data.",
@@ -56,19 +53,20 @@ def foreground_contribution_ratio(attribution, binary_mask):
     required=True,
     help="Which device to use (cpu, cuda:0).",
 )
-def main(regression_model, segmentation_folder, im_folder, csv_data, device):
+def main(regression_model, segmentation_folder, csv_data, device):
     # Load the regression model
     model = load_model(regression_model, device, dino_type="large")
-    model = model.half()
     model.eval()
 
     # Read csv data
     df = pd.read_csv(csv_data, sep=",")
 
+    preds_no_bg = []
+
     # For each image
-    for _, row in tqdm(df.iterrows()):
+    for _, row in tqdm(df.iterrows(), total=len(df)):
         sub_dir, sub_path = build_path(row)
-        im_path = os.path.join(im_folder, sub_path)
+        im_path = os.path.join(segmentation_folder, sub_path)
 
         im_name = Path(sub_path).stem
         no_bg_im = os.path.join(segmentation_folder, sub_dir, "masks", f"{im_name}.png")
@@ -77,25 +75,43 @@ def main(regression_model, segmentation_folder, im_folder, csv_data, device):
         # im_path and its binary mask no_bg_im
         std_im, im_tensor = load_image(im_path, device, im_size=(224, 224))
 
-        print(im_path)
-        print(row["y_pred"])
-        print(row["y_true"])
         # 1. How does the background affect the prediction results ?
         # 1.1 Predict on original image
-        pred = model(im_tensor)[0]
-        pred_in_days = int(DAYS_IN_YEAR * pred)
-        print(pred_in_days)
-        input()
+        # with torch.no_grad():
+        #     pred = model(im_tensor)[0]
+        #     pred_in_days = np.round(DAYS_IN_YEAR * pred.detach().cpu().numpy())
+        pred_in_days = int(row["y_pred"])
 
         # 1.2 Make background-less image and predict
+        binary_im = cv2.imread(no_bg_im)
+        std_im_no_bg = np.where(binary_im == 0, 0, std_im)
+
+        # Create a torch tensor
+        input_data_no_bg = torch.from_numpy(std_im_no_bg).unsqueeze(dim=0)
+
+        # Make it channel first
+        input_data_no_bg = input_data_no_bg.movedim(-1, 1)
+
+        # Move it to the device
+        input_data_no_bg = input_data_no_bg.to(device)
+
+        with torch.no_grad():
+            pred_no_bg = model(input_data_no_bg)[0]
+            pred_no_bg_in_days = np.round(DAYS_IN_YEAR * pred_no_bg.detach().cpu().numpy())
+
+        preds_no_bg.append(pred_no_bg_in_days)
 
         # 2. How much background pixels contribute to the prediction ?
         # Compute attribution on a single image
 
         # Compute (sum foreground contribution) / 1.0
 
-        print(sub_path)
-    # def inference_one_image(model, image_path):
+        if len(preds_no_bg) > 10:
+            break
+
+    df["y_pred_no_bg"] = preds_no_bg
+
+    df.to_csv("eval_biases_results.csv")
 
 
 if __name__ == "__main__":
