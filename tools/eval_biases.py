@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from .dino_saliency_map import load_model, load_image
+from .dino_saliency_map import load_model, load_image, compute_raw_gradients, get_attribution
 
 DAYS_IN_YEAR = 365.25
 
@@ -61,12 +61,16 @@ def main(regression_model, segmentation_folder, csv_data, device):
     # Read csv data
     df = pd.read_csv(csv_data, sep=",")
 
-    preds_no_bg = []
+    data = []
 
     # For each image
     for _, row in tqdm(df.iterrows(), total=len(df)):
+        new_row = {}
         sub_dir, sub_path = build_path(row)
         im_path = os.path.join(segmentation_folder, sub_path)
+        new_row["relative_image_path"] = sub_path
+        new_row["y_true"] = row["y_true"]
+        new_row["y_pred"] = row["y_pred"]
 
         im_name = Path(sub_path).stem
         no_bg_im = os.path.join(segmentation_folder, sub_dir, "masks", f"{im_name}.png")
@@ -80,11 +84,17 @@ def main(regression_model, segmentation_folder, csv_data, device):
         # with torch.no_grad():
         #     pred = model(im_tensor)[0]
         #     pred_in_days = np.round(DAYS_IN_YEAR * pred.detach().cpu().numpy())
-        pred_in_days = int(row["y_pred"])
+        # pred_in_days = int(row["y_pred"])
 
         # 1.2 Make background-less image and predict
         binary_im = cv2.imread(no_bg_im)
         std_im_no_bg = np.where(binary_im == 0, 0, std_im)
+
+        # Unnormalize image and save it
+        im_no_bg = (std_im_no_bg * 255).astype(np.uint8)
+        im_no_bg_dir = os.path.join(segmentation_folder, sub_dir, "no_bg")
+        os.makedirs(im_no_bg_dir, exist_ok=True)
+        cv2.imwrite(os.path.join(im_no_bg_dir, f"{im_name}.png"), im_no_bg)
 
         # Create a torch tensor
         input_data_no_bg = torch.from_numpy(std_im_no_bg).unsqueeze(dim=0)
@@ -98,19 +108,33 @@ def main(regression_model, segmentation_folder, csv_data, device):
         with torch.no_grad():
             pred_no_bg = model(input_data_no_bg)[0]
             pred_no_bg_in_days = np.round(DAYS_IN_YEAR * pred_no_bg.detach().cpu().numpy())
-
-        preds_no_bg.append(pred_no_bg_in_days)
+            new_row["y_pred_no_bg"] = pred_no_bg_in_days
 
         # 2. How much background pixels contribute to the prediction ?
+        # Compute fg/bg ratio
+        fg_bg_ratio = np.count_nonzero(binary_im) / np.prod(binary_im.shape)
+        new_row["fg_bg_ratio"] = fg_bg_ratio
+
         # Compute attribution on a single image
+        attrs = get_attribution(compute_raw_gradients, model, im_tensor)
+        attr_dir = os.path.join(segmentation_folder, sub_dir, "attrs")
+        os.makedirs(attr_dir, exist_ok=True)
+        cv2.imwrite(os.path.join(attr_dir, f"{im_name}.png"), attrs)
 
-        # Compute (sum foreground contribution) / 1.0
+        # Compute (sum foreground contribution) / (sum of all)
+        foreground_attribution_ratio = foreground_contribution_ratio(attrs, binary_im)
+        new_row["foreground_attribution_ratio"] = foreground_attribution_ratio
 
-        if len(preds_no_bg) > 10:
+        data.append(new_row)
+
+        print(new_row)
+        input()
+
+        if len(data) > 10:
             break
 
-    df["y_pred_no_bg"] = preds_no_bg
-
+    cols = list(data[0].keys())
+    df = pd.DataFrame(data, cols)
     df.to_csv("eval_biases_results.csv")
 
 
