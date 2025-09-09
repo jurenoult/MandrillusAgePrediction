@@ -2,7 +2,6 @@ import torch
 import numpy as np
 import click
 from mandrillage.models import DinoV2, RegressionHead
-from skimage import io
 import matplotlib.pyplot as plt
 import time
 import os
@@ -269,7 +268,7 @@ def main(model_path, im_path, im_folder, dino_type, device):
 
             std_im, input_tensor = load_image(im_path, device)
             gray_saliency_im = get_attribution(compute_raw_gradients, model, input_tensor)
-            io.imsave(output_path, gray_saliency_im)
+            cv2.imsave(output_path, gray_saliency_im)
 
 
 if __name__ == "__main__":
