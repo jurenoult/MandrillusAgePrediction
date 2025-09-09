@@ -27,7 +27,7 @@ def foreground_contribution_ratio(attribution, binary_mask):
     total_attributions = np.sum(attribution)
 
     assert (
-        len(bool_mask.shape) == 2 and len(attribution.shape) == 2
+        len(binary_mask.shape) == 2 and len(attribution.shape) == 2
     ), "Expected both attribution and binary mask to be grayscale"
 
     bool_mask = (binary_mask != 0).astype(np.uint8)
