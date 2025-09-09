@@ -67,6 +67,7 @@ def main(regression_model, segmentation_folder, csv_data, device):
     df = pd.read_csv(csv_data, sep=",")
 
     data = []
+    im_size = (224, 224)
 
     # For each image
     for _, row in tqdm(df.iterrows(), total=len(df)):
@@ -82,7 +83,7 @@ def main(regression_model, segmentation_folder, csv_data, device):
         assert os.path.exists(no_bg_im), f"Path does not exist: {no_bg_im}"
 
         # im_path and its binary mask no_bg_im
-        std_im, im_tensor = load_image(im_path, device, im_size=(224, 224))
+        std_im, im_tensor = load_image(im_path, device, im_size=im_size)
 
         # 1. How does the background affect the prediction results ?
         # 1.1 Predict on original image
@@ -92,7 +93,11 @@ def main(regression_model, segmentation_folder, csv_data, device):
         # pred_in_days = int(row["y_pred"])
 
         # 1.2 Make background-less image and predict
+        # Resize if not (224, 224)
         binary_im = cv2.imread(no_bg_im, cv2.IMREAD_GRAYSCALE)
+        if binary_im.shape[0:2] != im_size:
+            binary_im = cv2.resize(binary_im, im_size, interpolation=cv2.INTER_AREA)
+
         std_im_no_bg = np.where(binary_im[..., None] == 0, 0, std_im)
 
         # Unnormalize image and save it
