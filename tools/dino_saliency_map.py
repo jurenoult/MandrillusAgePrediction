@@ -92,7 +92,7 @@ def compute_raw_gradients(model, input_tensor):
     ig = IntegratedGradients(model)
     blurred = blur(input_tensor)
     attr = ig.attribute(
-        input_tensor, baselines=blurred, target=None, n_steps=50
+        input_tensor, baselines=blurred, target=None, n_steps=50, internal_batch_size=1
     )  # Regression → target=None
     return attr
 

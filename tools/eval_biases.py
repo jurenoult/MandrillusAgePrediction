@@ -26,9 +26,14 @@ def build_path(row):
 def foreground_contribution_ratio(attribution, binary_mask):
     total_attributions = np.sum(attribution)
 
-    foreground_attribution = np.where(binary_mask == 1, attribution, 0)
-    total_foreground_attributions = np.sum(foreground_attribution)
+    assert (
+        len(bool_mask.shape) == 2 and len(attribution.shape) == 2
+    ), "Expected both attribution and binary mask to be grayscale"
 
+    bool_mask = (binary_mask != 0).astype(np.uint8)
+
+    foreground_attribution = attribution * bool_mask
+    total_foreground_attributions = np.sum(foreground_attribution)
     return total_foreground_attributions / total_attributions
 
 
@@ -87,14 +92,16 @@ def main(regression_model, segmentation_folder, csv_data, device):
         # pred_in_days = int(row["y_pred"])
 
         # 1.2 Make background-less image and predict
-        binary_im = cv2.imread(no_bg_im)
-        std_im_no_bg = np.where(binary_im == 0, 0, std_im)
+        binary_im = cv2.imread(no_bg_im, cv2.IMREAD_GRAYSCALE)
+        std_im_no_bg = np.where(binary_im[..., None] == 0, 0, std_im)
 
         # Unnormalize image and save it
         im_no_bg = (std_im_no_bg * 255).astype(np.uint8)
         im_no_bg_dir = os.path.join(segmentation_folder, sub_dir, "no_bg")
         os.makedirs(im_no_bg_dir, exist_ok=True)
-        cv2.imwrite(os.path.join(im_no_bg_dir, f"{im_name}.png"), im_no_bg)
+        im_no_bg_path = os.path.join(im_no_bg_dir, f"{im_name}.png")
+        if not os.path.exists(im_no_bg_path):
+            cv2.imwrite(im_no_bg_path, im_no_bg)
 
         # Create a torch tensor
         input_data_no_bg = torch.from_numpy(std_im_no_bg).unsqueeze(dim=0)
@@ -116,22 +123,18 @@ def main(regression_model, segmentation_folder, csv_data, device):
         new_row["fg_bg_ratio"] = fg_bg_ratio
 
         # Compute attribution on a single image
-        attrs = get_attribution(compute_raw_gradients, model, im_tensor)
+        attr_gray, signed_attr = get_attribution(compute_raw_gradients, model, im_tensor)
         attr_dir = os.path.join(segmentation_folder, sub_dir, "attrs")
         os.makedirs(attr_dir, exist_ok=True)
-        cv2.imwrite(os.path.join(attr_dir, f"{im_name}.png"), attrs)
+        attr_path = os.path.join(attr_dir, f"{im_name}.png")
+        if not os.path.exists(attr_path):
+            cv2.imwrite(attr_path, attr_gray)
 
         # Compute (sum foreground contribution) / (sum of all)
-        foreground_attribution_ratio = foreground_contribution_ratio(attrs, binary_im)
+        foreground_attribution_ratio = foreground_contribution_ratio(attr_gray, binary_im)
         new_row["foreground_attribution_ratio"] = foreground_attribution_ratio
 
         data.append(new_row)
-
-        print(new_row)
-        input()
-
-        if len(data) > 10:
-            break
 
     cols = list(data[0].keys())
     df = pd.DataFrame(data, cols)
