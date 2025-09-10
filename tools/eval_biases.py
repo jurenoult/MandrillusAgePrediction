@@ -58,7 +58,13 @@ def foreground_contribution_ratio(attribution, binary_mask):
     required=True,
     help="Which device to use (cpu, cuda:0).",
 )
-def main(regression_model, segmentation_folder, csv_data, device):
+@click.option(
+    "--output_csv",
+    required=False,
+    default="biases_results.csv",
+    help="CSV file to store the results",
+)
+def main(regression_model, segmentation_folder, csv_data, device, output_csv):
     # Load the regression model
     model = load_model(regression_model, device, dino_type="large")
     model.eval()
@@ -69,8 +75,15 @@ def main(regression_model, segmentation_folder, csv_data, device):
     data = []
     im_size = (224, 224)
 
+    if os.path.exists(output_csv):
+        data_df = pd.read_csv(output_csv, sep=",")
+        data = data_df.to_dict(orient="records")
+
     # For each image
-    for _, row in tqdm(df.iterrows(), total=len(df)):
+    for i, row in tqdm(df.iterrows(), total=len(df)):
+        if i < len(data):
+            continue
+
         new_row = {}
         sub_dir, sub_path = build_path(row)
         im_path = os.path.join(segmentation_folder, sub_path)
@@ -141,8 +154,11 @@ def main(regression_model, segmentation_folder, csv_data, device):
 
         data.append(new_row)
 
-    cols = list(data[0].keys())
-    df = pd.DataFrame(data, cols)
+        if len(data) % 50 == 0:
+            df = pd.DataFrame(data)
+            df.to_csv("eval_biases_results.csv")
+
+    df = pd.DataFrame(data)
     df.to_csv("eval_biases_results.csv")
 
 
