@@ -1,4 +1,4 @@
-<!-- title: "Supplementary R Code for Mandrill Age Prediction Analysis" author: XXXX" date:14th Sept 2025 
+<!-- title: "Supplementary R Code for Mandrill Age Prediction Analysis" author: Julien RENOULT" date:14th Sept 2025 
 
 <!-- This R Markdown document provides the complete code used for the data loading, processing, statistical analyses, and figure generation presented in the main manuscript. All analyses were performed in R (version 4.3.0; 2023-04-21) using the packages listed below. -->
 
