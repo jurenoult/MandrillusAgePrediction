@@ -1,0 +1,1356 @@
+<!-- title: "Supplementary R Code for Mandrill Age Prediction Analysis" author: XXXX" date:14th Sept 2025 
+
+<!-- This R Markdown document provides the complete code used for the data loading, processing, statistical analyses, and figure generation presented in the main manuscript. All analyses were performed in R (version 4.3.0; 2023-04-21) using the packages listed below. -->
+
+<!-- Note on Reproducibility: -->
+
+<!-- File Paths: Please replace all placeholder file paths with the actual paths where your data and output folders are located on your system. -->
+
+<!-- Data Files: This script assumes the presence of specific .csv and .xlsx data files (e.g., predictions_bestModel_0-3.csv, MFD_metadatas.csv, data_mother_age_telomere.xlsx, telomere.xlsx). These files are provided as supplementary material -->
+
+<!-- ExifTool: The image copying section (commented out by default) requires the exiftoolr R package, which in turn relies on the external ExifTool software. Ensure ExifTool is installed and accessible in your system's PATH if you wish to run that specific section. -->
+
+<!-- ggplotly(): Interactive plots generated with ggplotly() are shown in the HTML output. The ggsave() lines are commented out by default but can be uncommented to save static versions. -->
+
+<!-- Setup and Package Loading -->
+<!-- This section sets up the knitr options for the R Markdown document and loads all necessary R packages required for the subsequent data loading, manipulation, statistical modeling, and plotting. -->
+
+## Set global chunk options for knitr
+```{r}
+knitr::opts_chunk$set(
+  echo = TRUE,      # Display source code in the output
+  warning = FALSE,  # Hide warnings in the output
+  message = FALSE,  # Hide messages in the output
+  results = 'hide'  # Hide results of code execution (e.g., package loading messages)
+)
+```
+
+##Loading Packages
+The following R packages are loaded. Please ensure they are installed (install.packages("package_name")) before running the script.
+```{r}
+library(readxl)   # For reading Excel files (.xlsx)
+library(dplyr)    # For data manipulation (e.g., %>% for piping, mutate, group_by, summarize, filter, distinct, left_join, bind_rows)
+library(tidyr)    # For data tidying (e.g., drop_na, pivot_longer, unnest)
+library(ggplot2)  # For creating static high-quality plots
+library(plotly)   # For creating interactive plots (used for some visualizations)
+library(lme4)     # For fitting Linear Mixed-Effects Models
+library(nlme)     # For fitting Linear Mixed-Effects Models
+library(glmmTMB)  # For Generalized Linear Mixed Models (alternative to glmer with more family options)
+library(bbmle)    # For model comparison (e.g., AICtab, although AIC() is used directly here)
+library(purrr)    # For functional programming (e.g., map_chr)
+library(tibble)   # For enhanced data frames (tibbles)
+library(nlme)     # For Linear Mixed-Effects Models (lme, especially with variance structures)
+library(reshape2) # For density plots
+```
+
+##Data Loading and Initial Formatting
+This section loads the prediction data from various models (e.g., 0-3, 0-12, 0-30 representing different age ranges for model training/application) and merges them with metadata about the photos, including face_qual (face quality) and sex of the individual.
+```{r}
+# Define the base path to the data directory.
+# IMPORTANT: Replace this with the actual path on your system where the data files are located.
+path1 <- "XXX/"
+
+# Load prediction data from different age range models
+# These CSV files contain 'photo_path', 'y_true' (real age), 'y_pred' (predicted age), and 'error'.
+data0_3 <- read.csv(paste0(path1, "predictions_bestModel_0-3.csv"), header = TRUE, sep = ";")
+data0_12 <- read.csv(paste0(path1, "predictions_bestModel_0-12.csv"), header = TRUE, sep = ";")
+data0_30 <- read.csv(paste0(path1, "predictions_bestModel_0-30.csv"), header = TRUE, sep = ";")
+
+# Load photo metadata
+# This CSV file contains information about each photo, including 'parent_folder', 'id', 'photo_name', 'face_qual', 'shootdate', etc.
+datPIC_name <- paste0(path1, "MFD_metadatas.csv")
+datPIC <- read.csv(datPIC_name, header = TRUE, sep = ",")
+
+# Create a unique 'photo_path' identifier in datPIC for merging
+# This path is constructed from existing columns to match the 'photo_path' in prediction data.
+datPIC$photo_path <- paste(datPIC$parent_folder, datPIC$id, datPIC$photo_name, sep = "_")
+
+# Create a unique dataset for individual IDs to extract sex information
+datPIC_unique <- distinct(datPIC, id, .keep_all = TRUE)
+
+# Merge face quality and sex information into each prediction dataset
+# 'face_qual' is merged from datPIC using 'photo_path'.
+# 'sex' is merged from datPIC_unique using 'id'.
+data0_3 <- merge(data0_3, datPIC[, c("photo_path", "face_qual", "shootdate")], by = "photo_path", all.x = TRUE)
+data0_3 <- merge(data0_3, datPIC_unique[, c("id", "sex")], by = "id", all.x = TRUE)
+data0_12 <- merge(data0_12, datPIC[, c("photo_path", "face_qual", "shootdate")], by = "photo_path", all.x = TRUE)
+data0_12 <- merge(data0_12, datPIC_unique[, c("id", "sex")], by = "id", all.x = TRUE)
+data0_30 <- merge(data0_30, datPIC[, c("photo_path", "face_qual", "shootdate")], by = "photo_path", all.x = TRUE)
+data0_30 <- merge(data0_30, datPIC_unique[, c("id", "sex")], by = "id", all.x = TRUE)
+```
+
+
+## Visualization of Predicted vs. Real Age Across Age Ranges (Reproduce Figure 1b)
+This section defines a function bin_age to group predicted ages by real age intervals and sex, then generates a combined plot showing the mean predicted age against real age for different age range models. This allows for a visual comparison of model performance across various age cohorts.
+```{r}
+# Define bin_age function
+# This function bins the true age ('y_true') into yearly intervals and calculates the mean predicted age ('y_pred')
+# for each interval, grouped by sex. It then renames the columns for consistent plotting.
+# @param data A data frame containing 'y_true' (real age in days), 'y_pred' (predicted age in days), and 'sex'.
+# @return A data frame with binned 'y_true' (midpoint of age interval), 'y_pred' (mean predicted age), and 'sex'.
+bin_age <- function(data) {
+  mean_data <- data %>%
+    # Create yearly age intervals for 'y_true'
+    mutate(y_true_interval = cut(y_true, breaks = seq(0, max(y_true, na.rm = TRUE) + 365.25, by = 365.25), include.lowest = TRUE)) %>%
+    # Group by age interval and sex, then summarize mean predicted age
+    group_by(y_true_interval, sex) %>%
+    summarise(mean_y_pred = mean(y_pred, na.rm = TRUE), .groups = 'drop')
+
+  mean_data <- mean_data %>%
+    # Convert interval factor to numerical midpoint of the interval
+    mutate(y_true_interval = as.numeric(y_true_interval) * 365.25 + 365.25 / 2 - 365.25) %>%
+    # Rename columns for consistency
+    rename(y_true = y_true_interval) %>%
+    rename(y_pred = mean_y_pred)
+  return(mean_data)
+}
+
+# Apply the bin_age function to each dataset
+mean_data0_3 <- bin_age(data0_3)
+mean_data0_12 <- bin_age(data0_12)
+mean_data0_30 <- bin_age(data0_30)
+
+# Add a 'dataset' identifier to each processed dataframe
+mean_data0_3 <- mutate(mean_data0_3, dataset = "0_3")
+mean_data0_12 <- mutate(mean_data0_12, dataset = "0_12")
+mean_data0_30 <- mutate(mean_data0_30, dataset = "0_30")
+
+# Combine all processed dataframes into a single dataframe for plotting
+combined_data <- bind_rows(mean_data0_3, mean_data0_12, mean_data0_30)
+
+# Filter out rows where sex is NA immediately after merging
+combined_data <- combined_data %>% filter(!is.na(sex))
+
+# Determine the maximum value for consistent axis limits across plots
+max_value <- max(max(combined_data$y_true, na.rm = TRUE), max(combined_data$y_pred, na.rm = TRUE))
+
+# Generate the ggplot
+plot <- ggplot(combined_data, aes(x = y_true, y = y_pred, color = sex, shape = dataset)) +
+  geom_point(size = 3) + # Add points for each data point
+  geom_line(aes(group = interaction(dataset, sex))) + # Add lines connecting points within each dataset and sex group
+  scale_color_manual(values = c("#009966", "#FFCC00")) + # Custom colors for sex (e.g., green for female, yellow for male)
+  labs(x = "Real Age (days)", y = "Predicted Age (days)", color = "Sex", shape = "Dataset") + # Axis and legend labels
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "black") + # Add a 1:1 reference line
+  theme_minimal() + # Use a minimal theme for cleaner aesthetics
+  xlim(0, max_value) + # Set x-axis limits
+  ylim(0, max_value) + # Set y-axis limits
+  coord_fixed() + # Ensure a 1:1 aspect ratio
+  scale_x_continuous(breaks = seq(0, 30, 2) * 365.25, labels = seq(0, 30, 2)) + # X-axis breaks and labels in years
+  scale_y_continuous(breaks = seq(0, 30, 2) * 365.25, labels = seq(0, 30, 2)) + # Y-axis breaks and labels in years
+  theme(panel.grid.major = element_line(color = "gray", linetype = "dashed")) # Customize major grid lines
+
+# Display the interactive plot (for HTML output)
+ggplotly(plot)
+```
+
+
+##Scatter Plot of Predicted vs. Real Age (All Images for 0-30 Model; Reproduce Figure 1a)
+This section generates a scatter plot showing individual predicted ages against real ages for the data0_30 dataset (representing the 0-30 years age range model). Points are semi-transparent to visualize density.
+```{r,eval=FALSE}
+# This chunk is set to eval=FALSE because the figure is quite heavy.It can be re-evaluated by setting eval=TRUE.
+
+# Select the data for the 0-30 age range model
+data <- data0_30
+
+# Filter out rows where sex is NA immediately after merging
+data <- data %>% filter(!is.na(sex))
+
+# Order data by sex for potential visual grouping (though not strictly necessary for scatter plot)
+data <- data[order(data$sex, decreasing = FALSE), ]
+
+# Determine the maximum value for consistent axis limits (re-used from previous chunk)
+# max_value is already defined from the previous chunk.
+
+# Generate the ggplot
+plot <- ggplot(data, aes(x = y_true, y = y_pred, color = sex)) +
+  geom_point(alpha = 0.6) + # Plot points with 60% opacity to show density
+  scale_color_manual(values = c("#009966", "#FFCC00")) + # Custom colors for sex
+  labs(x = "Real Age (days)", y = "Predicted Age (days)", color = "Sex") + # Axis and legend labels
+  theme(
+    panel.background = element_rect(fill = "white"), # White background
+    panel.grid.major = element_line(color = "grey"), # Grey major grid lines
+    panel.grid.minor = element_blank() # Remove minor grid lines
+  ) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "black") + # Add a 1:1 reference line
+  scale_fill_manual(values = c("#009966", "#FFCC00")) + # Custom fill colors (for potential boxplots/other geoms)
+  labs(fill = "Sex") + # Legend label for fill
+  xlim(0, max_value) + # Set x-axis limits
+  ylim(0, max_value) + # Set y-axis limits
+  coord_fixed() + # Ensure a 1:1 aspect ratio
+  scale_x_continuous(breaks = seq(0, 30, 2) * 365.25, labels = seq(0, 30, 2)) + # X-axis breaks and labels in years
+  scale_y_continuous(breaks = seq(0, 30, 2) * 365.25, labels = seq(0, 30, 2)) + # Y-axis breaks and labels in years
+  theme(panel.grid.major = element_line(color = "gray", linetype = "dashed")) # Customize major grid lines
+
+# Display the plot (commented out for eval=FALSE)
+ggplotly(plot)
+
+# To save the static plot (commented out for eval=FALSE)
+# ggsave(paste0(destination_folder, "age_predVSage_true0-30.svg"), plot, device = "svg")
+
+
+```
+
+
+##Analysis of Prediction Error Characteristics
+This section defines several helper functions for pooling data, filtering by sex, and filtering by minimum individual counts.
+```{r}
+
+#' pool_pic
+#'
+#' Pools individual image predictions within defined age ranges for each individual ('id').
+#' Calculates standard deviation (sd_y_pred), mean (mu_y_pred), and coefficient of variation (cv_y_pred)
+#' of predicted ages, as well as mean and SD of error, and relative error.
+#'
+#' @param data A data frame with 'id', 'y_true', 'y_pred', 'error', 'sex'.
+#' @param pooling_range Numeric, the size of age intervals in days for pooling predictions.
+#' @param n_min Numeric, minimum number of images required within an interval for an individual to be included.
+#' @return A data frame with pooled statistics per individual and age midpoint.
+pool_pic <- function(data, pooling_range, n_min) {
+  # Set n_min to 1 if not provided, ensuring at least one picture is considered.
+  if (missing(n_min)) n_min = 1
+  
+  max_age <- max(data$y_true, na.rm = TRUE) + 1
+  # Define age breaks for pooling
+  breaks <- seq(0, max_age, by = pooling_range)
+  # Assign each true age to an interval
+  interval <- findInterval(data$y_true, breaks)
+  start <- breaks[interval]
+  end <- breaks[interval + 1]
+  # Calculate the midpoint of each interval
+  data$midpoint <- round(start + (end - start) / 2, 0)
+  
+  # Group by individual, midpoint, and sex to summarize predictions
+  d <- data %>%
+    group_by(id, midpoint, sex) %>%
+    # Filter groups that have at least 'n_min' pictures
+    filter(n() >= n_min) %>%
+    summarize(
+      sd_y_pred = sd(y_pred, na.rm = TRUE),      # Standard deviation of predicted ages
+      mu_y_pred = mean(y_pred, na.rm = TRUE),    # Mean predicted age
+      mu_y_true = mean(y_true, na.rm = TRUE),    # Mean true age
+      mu_error = mean(error, na.rm = TRUE),      # Mean absolute error
+      sd_error = sd(error, na.rm = TRUE),        # Standard deviation of absolute error
+      .groups = 'drop'
+    ) %>%
+    # Calculate coefficients of variation
+    mutate(cv_y_pred = (sd_y_pred / mu_y_pred) * 100) %>%
+    mutate(cv_error = (sd_error / mu_error) * 100) %>%
+    # Calculate mean relative error
+    mutate(mu_error_rel = mu_y_pred - mu_y_true) %>%
+    # Join with a count of pictures per individual per midpoint
+    left_join(data %>%
+                group_by(id, midpoint) %>%
+                summarize(nb_pic = n(), .groups = 'drop'),
+              by = c("id", "midpoint"))
+  return(d)
+}
+
+#' dataMinf
+#'
+#' Filters the input data frame to include only female individuals.
+#'
+#' @param data A data frame with a 'sex' column.
+#' @return A data frame containing only female individuals.
+dataMinf <- function(data) {
+  data_f <- subset(data, sex == "f")
+  return(data_f)
+}
+
+#' dataMinm
+#'
+#' Filters the input data frame to include only male individuals.
+#'
+#' @param data A data frame with a 'sex' column.
+#' @return A data frame containing only male individuals.
+dataMinm <- function(data) {
+  data_m <- subset(data, sex == "m")
+  return(data_m)
+}
+
+#' filter_ind_min
+#'
+#' Filters data to include only age midpoints that have a minimum number of individuals.
+#'
+#' @param data A data frame with a 'midpoint' column.
+#' @param nb_ind_min Numeric, the minimum number of individuals required for a 'midpoint' to be kept.
+#' @return A data frame filtered by 'nb_ind_min'.
+filter_ind_min <- function(data, nb_ind_min) {
+  # Calculate the number of individuals per midpoint
+  data$nb_ind <- ave(data$midpoint, data$midpoint, FUN = length)
+  # Filter data where the number of individuals meets the minimum
+  data <- data[data$nb_ind >= nb_ind_min, ]
+  return(data)
+}
+
+#' pool_ind
+#'
+#' Pools data across individuals within each age midpoint, calculating overall statistics.
+#' Can return results separated by sex or combined.
+#'
+#' @param data A data frame, typically output from `pool_pic`.
+#' @param sex Logical, if TRUE, results are separated by sex; otherwise, combined.
+#' @return A data frame with pooled statistics per age midpoint (and sex if `sex=TRUE`).
+pool_ind <- function(data, sex) {
+  data <- na.omit(data) # Remove rows with NA values
+  if (sex == TRUE) {
+    error_by_range <- data %>%
+      group_by(midpoint, sex) %>%
+      summarize(
+        mean_mu_error = mean(mu_error, na.rm = TRUE),
+        sd_mu_error = sd(mu_error, na.rm = TRUE),
+        mean_mu_y_pred = mean(mu_y_pred, na.rm = TRUE),
+        mean_sd_y_pred = mean(sd_y_pred, na.rm = TRUE),
+        mean_cv_y_pred = mean(cv_y_pred, na.rm = TRUE),
+        sd_mu_y_pred = sd(mu_y_pred, na.rm = TRUE),
+        mean_sd_error = mean(sd_error, na.rm = TRUE),
+        mean_cv_error = mean(cv_error, na.rm = TRUE),
+        nb_pic = sum(nb_pic, na.rm = TRUE),
+        .groups = 'drop'
+      ) %>%
+      mutate(cv_mu_error = (sd_mu_error / mean_mu_error) * 100) %>%
+      mutate(cv_mu_y_pred = (sd_mu_y_pred / mean_mu_y_pred) * 100) %>%
+      left_join(data %>%
+                  group_by(midpoint, sex) %>%
+                  summarize(nb_ind = n(), .groups = 'drop'),
+                by = c("midpoint", "sex"))
+  } else {
+    error_by_range <- data %>%
+      group_by(midpoint) %>%
+      summarize(
+        mean_mu_error = mean(mu_error, na.rm = TRUE),
+        sd_mu_error = sd(mu_error, na.rm = TRUE),
+        mean_mu_y_pred = mean(mu_y_pred, na.rm = TRUE),
+        mean_sd_y_pred = mean(sd_y_pred, na.rm = TRUE),
+        mean_cv_y_pred = mean(cv_y_pred, na.rm = TRUE),
+        sd_mu_y_pred = sd(mu_y_pred, na.rm = TRUE),
+        mean_sd_error = mean(sd_error, na.rm = TRUE),
+        mean_cv_error = mean(cv_error, na.rm = TRUE),
+        nb_pic = sum(nb_pic, na.rm = TRUE),
+        .groups = 'drop'
+      ) %>%
+      mutate(cv_mu_error = (sd_mu_error / mean_mu_error) * 100) %>%
+      mutate(cv_mu_y_pred = (sd_mu_y_pred / mean_mu_y_pred) * 100) %>%
+      left_join(data %>%
+                  group_by(midpoint) %>%
+                  summarize(nb_ind = n(), .groups = 'drop'),
+                by = c("midpoint"))
+  }
+  return(error_by_range)
+}
+```
+
+##General Statistics About Prediction Error
+This section defines a function to calculate general statistics about the prediction error (mean error, standard deviation, coefficient of variation) and performs a Wilcoxon test to compare error between sexes.
+```{r}
+
+#' statistics
+#'
+#' Calculates various statistics on prediction error, including mean error, SD, CV,
+#' and performs a Wilcoxon test to compare mean error between sexes.
+#'
+#' @param data A data frame containing prediction results.
+#' @param pooling_range Numeric, age interval for pooling.
+#' @param n_min_pic Numeric, minimum pictures per individual per interval.
+#' @param nb_ind_min Numeric, minimum individuals per age midpoint.
+#' @return A list containing calculated statistics and Wilcoxon test results.
+statistics <- function (data, pooling_range, n_min_pic, nb_ind_min){
+  d <- pool_pic(data, pooling_range, n_min_pic)
+  d <- filter_ind_min(d, nb_ind_min)
+  df <- dataMinf(d) # Data for females
+  dm <- dataMinm(d) # Data for males
+  
+  mean_error <- mean(d$mu_error, na.rm = TRUE)
+  mean_sd <- mean(d$sd_y_pred, na.rm = TRUE)
+  mean_cv <- mean(d$cv_y_pred, na.rm = TRUE)
+  nb_pic <- sum(d$nb_pic, na.rm = TRUE)
+  
+  # Perform Wilcoxon test if both sexes have data
+  if (nrow(df) > 1 && nrow(dm) > 1) { # Ensure enough data for test
+    res <- wilcox.test(df$mu_error, dm$mu_error)
+    W_stat <- res$statistic
+    P_val <- res$p.value
+  } else {
+    W_stat <- NA
+    P_val <- NA
+  }
+  
+  result <- list(
+    mean_error = mean_error,
+    mean_sd = mean_sd,
+    mean_cv = mean_cv,
+    mean_error_f = mean(df$mu_error, na.rm = TRUE),
+    mean_error_m = mean(dm$mu_error, na.rm = TRUE),
+    W = W_stat,
+    Pval = P_val,
+    nb_pic = nb_pic
+  )
+  return(result)
+}
+```
+
+Example usage of the statistics function
+```{r}
+pooling_range <- 365/24 # pooling range in days
+n_min_pic <- 5 # min pictures per individual per interval
+nb_ind_min <- 1 # min individuals per age midpoint
+
+ALL_res <- rbind(
+   "0-30" = unlist(statistics(data0_30, pooling_range, n_min_pic, nb_ind_min)),
+   "0-12" = unlist(statistics(data0_12, pooling_range, n_min_pic, nb_ind_min)),
+   "0-3" = unlist(statistics(data0_3, pooling_range, n_min_pic, nb_ind_min))
+)
+print(ALL_res)
+```
+
+##Plotting Error with Age
+This section defines a flexible plotting function plotERRORvsAGE to visualize the distribution of prediction error (mu_error) against age (midpoint), allowing for boxplots or scatter plots, and separation by sex.
+```{r}
+
+#' plotERRORvsAGE
+#'
+#' Generates a plot of mean error (mu_error) against age (midpoint).
+#' Can create boxplots or scatter plots, and separate by sex.
+#'
+#' @param data A data frame, typically output from `pool_pic` and `filter_ind_min`.
+#' @param boxplot Character, "TRUE" for boxplots, "FALSE" for scatter plots.
+#' @param separate_sex Character, "TRUE" to separate plots by sex, "FALSE" to combine.
+#' @param age_max Numeric, maximum age value for the x-axis.
+#' @return A ggplot object.
+plotERRORvsAGE <- function(data, boxplot, separate_sex, age_max) {
+  data <- subset(data, midpoint <= age_max) # Filter data to max age
+  
+  if (boxplot == "TRUE") {
+    data$midpoint <- as.factor(data$midpoint) # Convert midpoint to factor for boxplot groups
+    if (separate_sex == "FALSE") {
+      plot <- ggplot(data = data, aes(x = midpoint, y = mu_error)) +
+        geom_boxplot(outliers = FALSE) + # Boxplot without outliers
+        theme(
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1), # Rotate x-axis labels
+          panel.background = element_rect(fill = "white"), # White background
+          panel.grid.major = element_line(color = "grey"), # Grey major grid lines
+          panel.grid.major.x = element_blank(), # Remove major x-grid lines
+          panel.grid.minor = element_blank() # Remove minor grid lines
+        )
+    } else {
+      plot <- ggplot(data = data, aes(x = midpoint, y = mu_error, fill = sex)) +
+        geom_boxplot(outliers = FALSE) +
+        scale_fill_manual(values = c("#009966", "#FFCC00")) + # Custom fill colors for sex
+        theme(
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+          panel.background = element_rect(fill = "white"),
+          panel.grid.major = element_line(color = "grey"),
+          panel.grid.major.x = element_blank(),
+          panel.grid.minor = element_blank()
+        )
+    }
+  } else { # Scatter plot option
+    if (separate_sex == "FALSE") {
+      plot <- ggplot(data = data, aes(x = midpoint, y = mu_error)) +
+        geom_point() + # Scatter points
+        labs(x = "Mean Real Age (days)", y = "Mean Absolute Error (days)") + # Axis labels
+        theme(
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+          panel.background = element_rect(fill = "white"),
+          panel.grid.major = element_line(color = "grey"),
+          panel.grid.major.x = element_blank(),
+          panel.grid.minor = element_blank()
+        )
+    } else {
+      plot <- ggplot(data = data, aes(x = midpoint, y = mu_error, color = sex)) +
+        geom_point() +
+        scale_color_manual(values = c("#009966", "#FFCC00")) +
+        labs(x = "Mean Real Age (days)", y = "Mean Absolute Error (days)", color = "Sex") +
+        theme(
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+          panel.background = element_rect(fill = "white"),
+          panel.grid.major = element_line(color = "grey"),
+          panel.grid.major.x = element_blank(),
+          panel.grid.minor = element_blank()
+        ) +
+        labs(fill = "Sex") # Legend label for fill
+    }
+  }
+  return(plot)
+}
+
+```
+
+
+# Example usage of plotERRORvsAGE (Reproduce Figure 1d, set parameters according to information in figure caption to reproduce Fig. 1c )
+```{r}
+pooling_range <- 365 # pooling range in days
+n_min_pic <- 0 # min pictures per individual per interval
+nb_ind_min <- 0 # min individuals per age midpoint
+data <- pool_pic(data0_12, pooling_range, n_min_pic)
+data <- filter_ind_min(data, nb_ind_min)
+data <- data %>% filter(!is.na(sex))
+plot <- plotERRORvsAGE(data, boxplot = TRUE, separate_sex = TRUE, age_max = 365*13)
+plot
+```
+
+
+#Building a Table of Mean Error Per Age Class
+This section iterates through different age range datasets, pools the prediction error by age class, and constructs a table showing the mean error for each age class across all datasets.
+```{r}
+pooling_range <- 365/24 # Pooling range in days (e.g., half-month intervals) for individual predictions.
+n_min_pic <- 0 # Minimum number of pictures per individual per pooling range (no filtering here).
+nb_ind_min <- 0 # Minimum number of individuals per age midpoint (no filtering here).
+
+# List of dataset names to process
+datas <- c("data0_30", "data0_13", "data0_12", "data0_4", "data0_3")
+
+# Loop through each dataset
+for (i in 1:length(datas)) {
+  # Pool predictions for the current dataset
+  data <- pool_pic(get(datas[i]), pooling_range, n_min_pic)
+  # Filter by minimum individuals (not active with nb_ind_min = 0)
+  data <- filter_ind_min(data, nb_ind_min)
+  
+  # Summarize mean error per midpoint and number of individuals
+  error_by_range <- data %>%
+    group_by(midpoint, nb_ind) %>%
+    summarize(mean_mu_error = mean(mu_error, na.rm = TRUE), .groups = 'drop')
+  
+  # Round mean error for readability
+  error_by_range$mean_mu_error <- round(error_by_range$mean_mu_error, 1)
+  
+  # Rename the error column to include the dataset name
+  names(error_by_range)[names(error_by_range) == "mean_mu_error"] <- paste0("error_", datas[i])
+  
+  # Initialize or append to the main dataframe
+  if (i == 1) {
+    df <- error_by_range # Initialize with the first dataset's results
+    max_len <- nrow(error_by_range) # Store max length for consistent column sizes
+  } else {
+    # Extract the error column as a vector
+    v <- unname(unlist(error_by_range[, 3]))
+    # Pad with NA if the current dataset has fewer age intervals
+    v <- c(v, rep(NA, max_len - length(v)))
+    # Bind the new column to the main dataframe
+    df <- cbind(df, v)
+    # Assign the correct column name
+    colnames(df)[ncol(df)] <- paste0("error_", datas[i])
+  }
+}
+
+df
+
+```
+
+#Linear Model to Study Effect of Sex and Face Quality on Error (Reproduce Table S11. Set parameters to reproduce the results of the different panels)
+This section builds a Generalized Linear Mixed Model (GLMM) to investigate the effects of sex, scaled true age, and face quality on prediction error, accounting for individual variability as a random effect.
+```{r}
+data<-data0_30
+data$error <- data$error + 10^-6
+data$y_true_scaled <- scale(data$y_true)
+data$face_qual <- factor(data$face_qual)
+weights <- 1 / (data$y_true_scaled)^2
+model <- glmer(error ~ sex + y_true_scaled + face_qual + (1 | id), data = data, family = Gamma(link = "log"))
+summary(model)
+
+```
+
+#Effect of Chronological Age on Inter-Individual Variation in Accuracy (Reproduce Figure S5 and Table S13)
+This section analyzes how inter-individual variation in prediction accuracy (measured by standard deviation and coefficient of variation of mean error) changes with chronological age. It fits a Generalized Linear Model (GLM) and generates a plot.
+```{r}
+pooling_range <- 30 * 3  # Pooling range in days (e.g., 3-month intervals) for individual predictions.
+n_min_pic <- 3 # Minimum number of pictures per individual per pooling range.
+
+# Pool data by individual and age midpoint
+data <- pool_pic(data0_12, pooling_range, n_min_pic)
+# Pool data across individuals to get mean SD and CV of error per age midpoint
+data <- pool_ind(data, sex = TRUE) # Separate by sex
+# Filter to include only age midpoints with at least 3 individuals
+data <- data %>% filter(nb_ind >= 3)
+
+# Statistical model: Generalized Linear Model (GLM)
+# - Dependent variable: 'cv_mu_error' (coefficient of variation of mean error)
+# - Fixed effects: 'sex', 'midpoint' (real age), and their interaction, plus 'nb_pic' (number of pictures)
+# - Family: Gamma distribution with a log link (suitable for positive, skewed data like CV)
+model <- glm(cv_mu_error ~ sex * midpoint + nb_pic, data = data, family = Gamma(link = "log"))
+summary(model)
+
+# Define custom colors for sex in plots
+sex_colors <- c("f" = "#009966", "m" = "#FFCC00")
+
+# Generate the ggplot
+plot <- ggplot(data = data) +
+  # Points for mean standard deviation of error
+  geom_point(aes(x = midpoint, y = sd_mu_error, color = sex, shape = "sd_mu_error", fill = sex), size = 3) +
+  # Points for mean coefficient of variation of error
+  geom_point(aes(x = midpoint, y = cv_mu_error, color = sex, shape = "cv_mu_error", fill = sex), size = 3) +
+  # Lines for mean standard deviation of error
+  geom_path(aes(x = midpoint, y = sd_mu_error, color = sex, group = sex, linetype = "sd_mu_error"), linetype = "solid") +
+  # Lines for mean coefficient of variation of error
+  geom_path(aes(x = midpoint, y = cv_mu_error, color = sex, group = sex, linetype = "cv_mu_error"), linetype = "dashed") +
+  scale_color_manual(values = sex_colors) + # Custom colors for sex
+  scale_shape_manual(values = c(sd_mu_error = 21, cv_mu_error = 22)) + # Custom shapes for metrics
+  scale_fill_manual(values = sex_colors) + # Custom fill colors for sex
+  scale_linetype_manual(values = c(sd_mu_error = "solid", cv_mu_error = "dashed"), name = "Metric Type") + # Custom line types
+  # Define a secondary y-axis for CV, scaled to match SD
+  scale_y_continuous(name = "Standard Deviation of MAE (days)", sec.axis = sec_axis(~ ., name = "Coefficient of Variation of MAE (%)")) +
+  labs(x = "Real Age (days)") + # X-axis label
+  theme_minimal() + # Minimal theme
+  theme(
+    axis.title.y = element_text(color = "black"), # Primary y-axis title color
+    axis.title.y.right = element_text(color = "black") # Secondary y-axis title color
+  )
+
+# Display the plot
+plot
+
+```
+
+#Intra-Individual Variation Analysis
+This section defines functions to analyze intra-individual variation in predicted ages. It involves sampling data, pooling predictions within individuals, and then pooling variation across age intervals.
+```{r}
+
+#' sample_data
+#'
+#' Randomly samples 'n' rows for each unique combination of 'id' and 'y_true'.
+#' Used to simulate different numbers of images per individual for analysis.
+#'
+#' @param data A data frame with 'id' and 'y_true'.
+#' @param n Numeric, the number of rows to sample per group.
+#' @return A data frame with sampled rows.
+sample_data <- function(data, n) {
+  data %>%
+    group_by(id, y_true) %>%
+    sample_n(n) %>%
+    ungroup()
+}
+
+#' pool_variation
+#'
+#' Averages standard deviation and coefficient of variation of error by predefined age intervals.
+#'
+#' @param data A data frame containing 'midpoint' (age midpoint), 'sd_error', 'cv_error', 'sex'.
+#' @param sex Logical, if TRUE, results are separated by sex.
+#' @return A data frame with mean SD and CV of error per age interval (and sex if `sex=TRUE`).
+pool_variation <- function(data, sex) {
+  # Define age breaks (e.g., 0-3 years, 3-12 years)
+  breaks <- c(0, 365.25 * 3, 365.25 * 12)
+  # Assign each midpoint to a new, broader interval
+  interval <- findInterval(data$midpoint, breaks)
+  start <- breaks[interval]
+  end <- breaks[interval + 1]
+  data$midpointNEW <- round(start + (end - start) / 2, 0)
+  
+  if (sex == TRUE) {
+    d <- data %>%
+      group_by(midpointNEW, sex) %>%
+      summarize(
+        mean_sd_error = mean(sd_error, na.rm = TRUE),
+        mean_cv_error = mean(cv_error, na.rm = TRUE),
+        .groups = 'drop'
+      ) %>%
+      # Join with number of individuals per new midpoint and sex
+      left_join(data %>%
+                  group_by(midpointNEW, sex) %>%
+                  summarize(nb_ind = n(), .groups = 'drop'),
+                by = c("midpointNEW", "sex"))
+  } else {
+    d <- data %>%
+      group_by(midpointNEW) %>%
+      summarize(
+        mean_sd_error = mean(sd_error, na.rm = TRUE),
+        mean_cv_error = mean(cv_error, na.rm = TRUE),
+        .groups = 'drop'
+      ) %>%
+      # Join with number of individuals per new midpoint
+      left_join(data %>%
+                  group_by(midpointNEW) %>%
+                  summarize(nb_ind = n(), .groups = 'drop'),
+                by = c("midpointNEW"))
+  }
+  return(d)
+}
+```
+
+
+#Intra-Individual Variation Analysis (Main Loop and Plotting; Reproduce Figure S3)
+This section performs the main analysis of intra-individual variation. It loops through different sample sizes of images per individual, calculates SD and CV of error, and then plots these metrics against the number of images.
+```{r}
+# ANALYSIS
+# Filter data for quality and age range
+db <- filter(data0_12, face_qual >= 1) # Consider images with face quality >= 1
+pooling_range <- 0.5 # Pooling range in days for initial individual prediction (e.g., half-day intervals)
+n_min_pic <- 15 # Minimum number of pictures per individual per pooling range for inclusion
+
+# Initial pooling of data
+data_ref <- pool_pic(db, pooling_range, n_min_pic)
+data_ref <- data_ref %>% rename(y_true = midpoint)
+
+# Filter original data to include only individuals and age points present in data_ref
+data <- semi_join(db, data_ref, by = c("id", "y_true"))
+
+# Loop through different sample sizes (n) for intra-individual analysis
+for (n in 3:n_min_pic) {
+  # Loop for multiple permutations for each sample size
+  for (i in 1:10) { # 10 permutations for averaging
+    df <- sample_data(data, n) # Randomly sample 'n' rows per id and y_true
+    df <- pool_pic(df, pooling_range, 1) # Calculate SD and CV over the 'n' sampled rows
+    df <- na.omit(df) # Remove NA values
+    
+    # Pool variation across age intervals (without separating by sex)
+    res <- pool_variation(df, sex = FALSE)
+    
+    # Store results for SD and CV
+    if (i == 1) {
+      sd <- res[, c(1, 4, 2)] # Select midpointNEW, nb_ind, mean_sd_error
+      cv <- res[, c(1, 4, 3)] # Select midpointNEW, nb_ind, mean_cv_error
+    } else {
+      sd <- cbind(sd, res$mean_sd_error) # Append mean_sd_error
+      cv <- cbind(cv, res$mean_cv_error) # Append mean_cv_error
+    }
+  }
+  
+  # Calculate row means of SD and CV across permutations
+  meansd <- rowMeans(sd[, 3:ncol(sd)], na.rm = TRUE)
+  meancv <- rowMeans(cv[, 3:ncol(cv)], na.rm = TRUE)
+  
+  # Store results for each sample size 'n'
+  if (n == 3) {
+    resultsd <- cbind(sd[, c(1:2)], meansd)
+    resultcv <- cbind(cv[, c(1:2)], meancv)
+  } else {
+    resultsd <- cbind(resultsd, meansd)
+    resultcv <- cbind(resultcv, meancv)
+  }
+}
+
+# Rename columns of results dataframes
+names(resultsd) <- c("age", "nb_ind", as.character(3:n_min_pic))
+names(resultcv) <- c("age", "nb_ind", as.character(3:n_min_pic))
+
+# PLOT
+# Convert 'resultsd' to long format for plotting
+df_longsd <- resultsd %>%
+  pivot_longer(cols = -c(age, nb_ind), # Pivot all columns except 'age' and 'nb_ind'
+               names_to = "variable", # New column for original column names (number of images)
+               values_to = "value") %>% # New column for the values (SD)
+  mutate(variable = as.numeric(gsub("col", "", variable))) # Convert 'variable' to numeric
+
+# Convert 'resultcv' to long format for plotting
+df_longcv <- resultcv %>%
+  pivot_longer(cols = -c(age, nb_ind),
+               names_to = "variable",
+               values_to = "value") %>%
+  mutate(variable = as.numeric(gsub("col", "", variable)))
+
+# Add a 'metric' column to distinguish SD and CV
+df_longsd$metric <- "sd"
+df_longcv$metric <- "cv"
+
+# Combine SD and CV dataframes
+df_combined <- bind_rows(df_longsd, df_longcv)
+
+# Generate the ggplot
+plot <- ggplot(df_combined, aes(x = variable, y = value, color = metric)) +
+  geom_line() + # Plot lines
+  facet_wrap(~ age, scales = "fixed", ncol = 3) + # Create facets for each age interval
+  labs(x = "Number of images sampled per individual", y = "Metric Value") + # Axis labels
+  # Define a secondary y-axis (though not used for scaling in this specific plot setup)
+  scale_y_continuous(
+    sec.axis = sec_axis(~ ., name = "Value")
+  ) +
+  theme_minimal() + # Minimal theme
+  theme(legend.position = "top") # Legend at the top
+
+# Display the plot
+plot
+  
+```
+
+#pool_ind2 Function Definition
+This section defines pool_ind2, a variant of pool_ind that allows for pooling across age intervals that are different from those used in pool_pic. This provides more flexibility in defining age bins for subsequent analyses.
+```{r}
+
+#' pool_ind2
+#'
+#' A variant of `pool_ind` that pools across individuals within age intervals defined by `pooling_range_ind`.
+#' This allows for different age interval granularities compared to `pool_pic`.
+#'
+#' @param data A data frame, typically output from `pool_pic`.
+#' @param pooling_range_ind Numeric, the size of age intervals in days for pooling individual statistics.
+#' @param sex Logical, if TRUE, results are separated by sex; otherwise, combined.
+#' @return A data frame with pooled statistics per new age midpoint (and sex if `sex=TRUE`).
+pool_ind2 <- function(data, pooling_range_ind, sex) {
+  # Define age breaks for the new pooling range
+  breaks <- seq(0, 30 * 365.25, by = pooling_range_ind) # Breaks up to 30 years
+  # Assign each midpoint to a new interval
+  interval <- findInterval(data$midpoint, breaks)
+  start <- breaks[interval]
+  end <- breaks[interval + 1]
+  data$midpointNEW <- round(start + (end - start) / 2, 0) # Calculate new midpoint
+  
+  data <- na.omit(data) # Remove rows with NA values
+  
+  if (sex == TRUE) {
+    error_by_range <- data %>%
+      group_by(midpointNEW, sex) %>%
+      summarize(
+        mean_sd_error = mean(sd_error, na.rm = TRUE),
+        mean_cv_error = mean(cv_error, na.rm = TRUE),
+        nb_pic = sum(nb_pic, na.rm = TRUE),
+        .groups = 'drop'
+      ) %>%
+      left_join(data %>%
+                  group_by(midpointNEW, sex) %>%
+                  summarize(nb_ind = n(), .groups = 'drop'),
+                by = c("midpointNEW", "sex"))
+  } else {
+    error_by_range <- data %>%
+      group_by(midpointNEW) %>%
+      summarize(
+        mean_sd_error = mean(sd_error, na.rm = TRUE),
+        mean_cv_error = mean(cv_error, na.rm = TRUE),
+        nb_pic = sum(nb_pic, na.rm = TRUE),
+        .groups = 'drop'
+      ) %>%
+      left_join(data %>%
+                  group_by(midpointNEW) %>%
+                  summarize(nb_ind = n(), .groups = 'drop'),
+                by = c("midpointNEW"))
+  }
+  return(error_by_range)
+}
+
+```
+
+#Consistency of Prediction Error within Individuals
+This section contains analyses to investigate the consistency of prediction error for the same individual across different age points. It explores whether predictions tend to be consistently over- or under-estimated for an individual.
+```{r}
+#For 0-1 year (Reproduce Fig. 4a)
+pooling_range <- 365.25/12 # Pooling range in days (e.g., monthly intervals)
+n_permutations <- 500 # Number of permutations for null distribution
+n_pairs <- 20 # Number of pairs to sample for observed and null probabilities
+sex <- "both" # Filter by sex ("m", "f", or "both")
+#interval_differences <- c(1,2,3,4,5,6,7,8,9) # Set how distant are the two age intervals to be compared (in units of pooling_range)
+interval_differences <- c(1,2,3,4,5)
+
+data <- data0_4 # Select data for the 0-4 age range model
+data <- data %>% filter(y_true < 365.25) # Filter data to individuals younger than 1 year (example)
+
+# Filter by sex if specified
+if (sex == "m") {
+  data <- data %>% filter(sex == "m")
+}
+if (sex == "f") {
+  data <- data %>% filter(sex == "f")
+}
+# If sex == "both", no filtering needed
+
+#### Prepare data
+# Define age breaks for pooling
+breaks <- seq(0, 30 * 365.25, by = pooling_range)
+interval <- findInterval(data$y_true, breaks)
+start <- breaks[interval]
+end <- breaks[interval + 1]
+data$midpoint <- round(start + (end - start) / 2, 0)
+
+# Calculate y_pred_mean for each midpoint (mean predicted age within that interval)
+data <- data %>%
+  group_by(midpoint) %>%
+  mutate(y_pred_mean = mean(y_pred, na.rm = TRUE)) %>%
+  ungroup()
+
+# Sort data by midpoint and create an index 'i' for each unique midpoint
+data <- data %>%
+  arrange(midpoint) %>%
+  mutate(i = as.integer(factor(midpoint, levels = unique(midpoint))))
+
+max_i <- max(data$i) # Maximum index for age intervals
+
+# Prepare dataframe to store results
+column_names <- c("interval_diff", "prob_mean_obs", "p_val", as.character(1:n_permutations))
+results <- data.frame(matrix(NA, nrow = length(interval_differences), ncol = length(column_names)))
+colnames(results) <- column_names
+results$"interval_diff" <- interval_differences
+
+# Define the function to calculate pairs of intervals with a given difference
+#' find_pairs
+#'
+#' Generates pairs of interval indices with a specified difference.
+#'
+#' @param n Numeric, total number of intervals.
+#' @param y Numeric, the desired difference between interval indices.
+#' @return A data frame with pairs of interval indices.
+find_pairs <- function(n, y) {
+  pairs <- list()
+  for (i in 1:(n - y)) { # Loop up to n-y to ensure j is within bounds
+    j <- i + y
+    pairs <- append(pairs, list(c(i, j)))
+  }
+  pairs_df <- do.call(rbind, lapply(pairs, function(x) data.frame(value1 = x[1], value2 = x[2])))
+  return(pairs_df)
+}
+  
+# Loop through each specified interval difference
+for (y in 1:length(interval_differences)) {
+  interval_diff <- interval_differences[y]
+  print(paste0("Interval difference: ", interval_diff))
+  
+  possible_interval_pairs <- find_pairs(max_i, interval_diff)
+  
+  # Skip if no possible pairs for this interval difference
+  if (nrow(possible_interval_pairs) == 0) {
+    results$"prob_mean_obs"[y] <- NA
+    results$"p_val"[y] <- NA
+    results[y, 4:(3 + n_permutations)] <- NA
+    cat("\nNo possible pairs for this interval difference.\n")
+    next
+  }
+  
+  # Calculate observed probability: two predictions from the same individual,
+  # at two age intervals separated by 'interval_diff', are both above their respective true ages.
+  prob_above_mean_observed <- numeric(n_pairs)
+  for (w in 1:n_pairs) {
+    attempt <- 0
+    while (attempt < 100) { # Limit attempts to find a valid pair
+      selected_interval_pair <- possible_interval_pairs[sample(nrow(possible_interval_pairs), 1), ]
+      
+      # Filter data for the two selected intervals
+      data_red1 <- data %>% filter(i == selected_interval_pair$value1)
+      data_red2 <- data %>% filter(i == selected_interval_pair$value2)
+      
+      # Find common individuals present in both intervals
+      common_ids <- intersect(data_red1$id, data_red2$id)
+      
+      if (length(common_ids) > 0) {
+        # Select a random common individual
+        selected_id <- sample(common_ids, 1)
+        
+        # Filter data for this individual in both intervals
+        row1_data <- data_red1 %>% filter(id == selected_id)
+        row2_data <- data_red2 %>% filter(id == selected_id)
+        
+        # Sample one prediction from each interval for this individual
+        if (nrow(row1_data) > 0 && nrow(row2_data) > 0) {
+          row1 <- sample_n(row1_data, 1)
+          row2 <- sample_n(row2_data, 1)
+          prob_above_mean_observed[w] <- ((row1$y_pred > row1$y_true) & (row2$y_pred > row2$y_true))
+          break # Exit while loop if valid pair found
+        }
+      }
+      attempt <- attempt + 1
+    }
+    if (attempt == 100) prob_above_mean_observed[w] <- NA # Mark as NA if no valid pair found after attempts
+  }
+  
+  prob_above_mean_observed <- prob_above_mean_observed[!is.na(prob_above_mean_observed)]
+  if (length(prob_above_mean_observed) == 0) {
+    results$"prob_mean_obs"[y] <- NA
+    results$"p_val"[y] <- NA
+    results[y, 4:(3 + n_permutations)] <- NA
+    cat("\nNo valid observed pairs found for this interval difference.\n")
+    next
+  }
+  results$"prob_mean_obs"[y] <- round(mean(prob_above_mean_observed), 4)
+  
+  # Calculate the null distribution of prob_above_mean_observed
+  # (randomly select individuals for each interval, not necessarily the same individual)
+  prob_above_mean_null <- numeric(n_permutations)
+  for (j in 1:n_permutations) {
+    prob_above_mean_perm <- numeric(n_pairs)
+    for (w in 1:n_pairs) {
+      attempt <- 0
+      while (attempt < 100) {
+        selected_interval_pair <- possible_interval_pairs[sample(nrow(possible_interval_pairs), 1), ]
+        
+        data_red1 <- data %>% filter(i == selected_interval_pair$value1)
+        data_red2 <- data %>% filter(i == selected_interval_pair$value2)
+        
+        if (nrow(data_red1) > 0 && nrow(data_red2) > 0) {
+          # Randomly select individuals for each interval (can be different)
+          rand_indiv1 <- sample(unique(data_red1$id), 1)
+          rand_indiv2 <- sample(unique(data_red2$id), 1)
+          
+          row1_data <- data_red1 %>% filter(id == rand_indiv1)
+          row2_data <- data_red2 %>% filter(id == rand_indiv2)
+          
+          if (nrow(row1_data) > 0 && nrow(row2_data) > 0) {
+            row1 <- sample_n(row1_data, 1)
+            row2 <- sample_n(row2_data, 1)
+            prob_above_mean_perm[w] <- ((row1$y_pred > row1$y_true) & (row2$y_pred > row2$y_true))
+            break
+          }
+        }
+        attempt <- attempt + 1
+      }
+      if (attempt == 100) prob_above_mean_perm[w] <- NA
+    }
+    prob_above_mean_perm <- prob_above_mean_perm[!is.na(prob_above_mean_perm)]
+    if (length(prob_above_mean_perm) > 0) {
+        prob_above_mean_null[j] <- round(mean(prob_above_mean_perm), 4)
+    } else {
+        prob_above_mean_null[j] <- NA
+    }
+    cat("\rCompleted", j)
+    flush.console()
+  }
+  prob_above_mean_null <- prob_above_mean_null[!is.na(prob_above_mean_null)]
+  if (length(prob_above_mean_null) > 0) {
+    results$"p_val"[y] <- mean(prob_above_mean_null >= results$"prob_mean_obs"[y])
+  } else {
+    results$"p_val"[y] <- NA
+  }
+  results[y, 4:(3 + n_permutations)] <- prob_above_mean_null
+  cat("\n")
+}
+
+```
+
+# ALTERNATIVE TO THE PREVIOUS CHUNK: Reproduce Figure 4b
+```{r}
+pooling_range <- 365.25 # Pooling range in days (e.g., yearly intervals)
+n_permutations <- 1000 # Number of permutations for null distribution
+n_pairs <- 1000 # Number of pairs to sample for observed and null probabilities
+sex <- "both" # Filter by sex ("m", "f", or "both")
+# interval_differences <- c(60) # Example: set how distant are the two age intervals to be compared.
+interval_differences <- c(1,2,3,4,6,7) # Set how distant are the two age intervals to be compared (in units of pooling_range)
+
+# data <- data0_13 # Select data for the 0-13 age range model (example)
+# data <- data %>% filter(y_true > 365.25 * 0) # Example: filter for individuals older than 0 years
+
+# Filter by sex if specified
+if (sex == "m") {
+  data <- data %>% filter(sex == "m")
+}
+if (sex == "f") {
+  data <- data %>% filter(sex == "f")
+}
+# If sex == "both", no filtering needed
+
+#### Prepare data
+# Define age breaks for pooling
+breaks <- seq(0, 30 * 365.25, by = pooling_range)
+interval <- findInterval(data$y_true, breaks)
+start <- breaks[interval]
+end <- breaks[interval + 1]
+data$midpoint <- round(start + (end - start) / 2, 0)
+
+# Calculate y_pred_mean for each midpoint (mean predicted age within that interval)
+data <- data %>%
+  group_by(midpoint) %>%
+  mutate(y_pred_mean = mean(y_pred, na.rm = TRUE)) %>%
+  ungroup()
+
+# Sort data by midpoint and create an index 'i' for each unique midpoint
+data <- data %>%
+  arrange(midpoint) %>%
+  mutate(i = as.integer(factor(midpoint, levels = unique(midpoint))))
+
+max_i <- max(data$i) # Maximum index for age intervals
+
+# Prepare dataframe to store results
+column_names <- c("interval_diff", "prob_mean_obs", "p_val", as.character(1:n_permutations), "n_common_ids")
+results <- data.frame(matrix(NA, nrow = length(interval_differences), ncol = length(column_names)))
+colnames(results) <- column_names
+results$"interval_diff" <- interval_differences
+
+# Loop through each specified interval difference
+for (y in 1:length(interval_differences)) {
+  interval_diff <- interval_differences[y]
+  print(paste0("Interval difference: ", interval_diff))
+  
+  # Define specific intervals for Method 5 (e.g., 2nd and (2+interval_diff)th interval)
+  # Here, 'i %in% c(2,3)' might represent age interval 1-3 years, and '(3+interval_diff)' another specific interval.
+  # This part needs to be carefully defined based on the specific biological question.
+  data_red1 <- data %>% filter(i %in% c(2,3)) # Example: Filter for specific initial intervals
+  data_red2 <- data %>% filter(i %in% (3 + interval_diff)) # Example: Filter for specific target interval
+  
+  # Find common individuals present in both selected intervals
+  common_ids <- intersect(data_red1$id, data_red2$id)
+  print(paste0("n_common_ids: ", length(common_ids)))
+  
+  # If no common individuals, skip this interval difference
+  if (length(common_ids) == 0) {
+    results$"prob_mean_obs"[y] <- NA
+    results$"n_common_ids"[y] <- 0
+    results$"p_val"[y] <- NA
+    results[y, 4:(3 + n_permutations)] <- NA
+    cat("\nNo common individuals for this interval difference.\n")
+    next
+  }
+  
+  # Calculate observed probability: two predictions from the same individual,
+  # from the specific age intervals, are both above their respective true ages.
+  prob_above_mean_observed <- numeric(n_pairs)
+  for (w in 1:n_pairs) {
+    # Select a random common individual
+    selected_id <- sample(common_ids, 1)
+    
+    # Filter data for this individual in both intervals
+    row1_data <- data_red1 %>% filter(id == selected_id)
+    row2_data <- data_red2 %>% filter(id == selected_id)
+    
+    # Sample one prediction from each interval for this individual
+    row1 <- sample_n(row1_data, 1)
+    row2 <- sample_n(row2_data, 1)
+    
+    prob_above_mean_observed[w] <- ((row1$y_pred > row1$y_true) & (row2$y_pred > row2$y_true))
+  }
+  
+  results$"prob_mean_obs"[y] <- round(mean(prob_above_mean_observed), 4)
+  results$"n_common_ids"[y] <- length(common_ids)
+  
+  # Calculate the null distribution of prob_above_mean_observed
+  # (randomly select individuals for each interval, not necessarily the same individual)
+  prob_above_mean_null <- numeric(n_permutations)
+  for (j in 1:n_permutations) {
+    prob_above_mean_perm <- numeric(n_pairs)
+    for (w in 1:n_pairs) {
+      # Randomly select individuals for each interval (can be different individuals)
+      rand_indiv1 <- sample(unique(data_red1$id), 1)
+      rand_indiv2 <- sample(unique(data_red2$id), 1)
+      
+      row1_data <- data_red1 %>% filter(id == rand_indiv1)
+      row2_data <- data_red2 %>% filter(id == rand_indiv2)
+      
+      # Sample one prediction from each interval for the randomly selected individuals
+      row1 <- sample_n(row1_data, 1)
+      row2 <- sample_n(row2_data, 1)
+      
+      prob_above_mean_perm[w] <- ((row1$y_pred > row1$y_true) & (row2$y_pred > row2$y_true))
+    }
+    prob_above_mean_null[j] <- round(mean(prob_above_mean_perm), 4)
+    cat("\rCompleted", j)
+    flush.console()
+  }
+  
+  # Calculate p-value
+  results$"p_val"[y] <- mean(prob_above_mean_null >= round(mean(prob_above_mean_observed), 4))
+  results[y, 4:(3 + n_permutations)] <- prob_above_mean_null
+  cat("\n")
+}
+
+
+```
+
+#Plotting Permutation Test Results (produced by either of the 2 previous chunks)
+This section generates a density plot to visualize the null distribution of probabilities from the permutation tests  and indicates the observed probability and p-value.
+```{r}
+
+# Ensure 'results' dataframe is available from the previous chunk.
+
+# Extract permutation values
+values_df1 <- data.frame(t(results[, -(1:3)])) # Exclude interval_diff, prob_mean_obs, p_val
+values_df1 <- values_df1[-nrow(values_df1), ] # Remove last row if it's metadata from transpose
+colnames(values_df1) <- as.character(results$interval_diff) # Set column names to interval differences
+
+# Create a separate dataframe for additional info (observed probability and p-value)
+additional_info_df1 <- results[, 1:3]
+additional_info_df1$interval_diff <- as.character(additional_info_df1$interval_diff)
+names(additional_info_df1)[2] <- "prob_mean_obs"
+names(additional_info_df1)[3] <- "p_val"
+
+# Convert the permutation values dataframe from wide to long format for density calculation
+df_long1 <- values_df1 %>%
+  pivot_longer(cols = everything(), names_to = "interval_diff", values_to = "value")
+
+# Merge long data with additional information
+df_long1 <- df_long1 %>%
+  left_join(additional_info_df1, by = "interval_diff")
+df_long1$interval_diff <- as.numeric(df_long1$interval_diff)
+
+#' compute_density
+#'
+#' Helper function to compute density for a set of values and return as a data frame.
+#'
+#' @param values Numeric vector for which to compute density.
+#' @param line_name Character, identifier for the density curve.
+#' @return A data frame with x (density values), y (density heights), and interval_diff.
+compute_density <- function(values, line_name) {
+  dens <- density(values, na.rm = TRUE) # Compute density, handling NAs
+  data.frame(x = dens$x, y = dens$y, interval_diff = line_name)
+}
+
+# Calculate densities for each interval difference
+densities1 <- df_long1 %>%
+  group_by(interval_diff) %>%
+  do(compute_density(.$value, unique(.$interval_diff))) %>%
+  ungroup()
+
+# Normalise densities to share the same scale on the y-axis (height)
+densities1 <- densities1 %>%
+  group_by(interval_diff) %>%
+  mutate(y = y / max(y, na.rm = TRUE)) %>% # Normalise by max density for each facet
+  ungroup()
+
+# Extract observed probability values for plotting
+prob_mean_obs_values1 <- df_long1 %>%
+  select(interval_diff, prob_mean_obs) %>%
+  distinct()
+
+# Determine axis limits for each facet to ensure observed value is within range
+axis_limits1 <- densities1 %>%
+  group_by(interval_diff) %>%
+  summarize(min_x = min(x, na.rm = TRUE), max_x = max(x, na.rm = TRUE)) %>%
+  left_join(prob_mean_obs_values1, by = "interval_diff") %>%
+  # Ensure observed value is within plot limits, adding a buffer
+  mutate(min_x = pmin(min_x, prob_mean_obs, na.rm = TRUE) - 0.05 * (max_x - min_x), 
+         max_x = pmax(max_x, prob_mean_obs, na.rm = TRUE) + 0.05 * (max_x - min_x))
+
+
+# Generate the ggplot
+plot1 <- ggplot(densities1, aes(x = x, y = y)) +
+  geom_density(stat = "identity", fill = "#D5D8DC", alpha = 0.6) + # Density plot with fill
+  geom_vline(data = prob_mean_obs_values1, aes(xintercept = prob_mean_obs), color = "red", linetype = "dashed") + # Vertical line for observed probability
+  facet_grid(~ interval_diff, scales = "free_x", space = "free_x") + # Facet by interval difference, with free x-scales
+  coord_flip() + # Flip coordinates (x-axis becomes vertical)
+  theme_minimal() + # Minimal theme
+  labs(x = "Probability", y = "Normalised Density", title = "Permutation Test Results: Observed vs. Null Distribution") + # Axis and title labels
+  theme(
+    strip.text.x = element_blank(), # Remove facet titles
+    strip.background = element_blank() # Remove facet background
+  ) +
+  # Set continuous x-axis limits (after coord_flip, this is the vertical axis)
+  scale_x_continuous(
+    limits = c(min(axis_limits1$min_x, na.rm = TRUE), max(axis_limits1$max_x, na.rm = TRUE)),
+    expand = c(0.1, 0.1) # Expand limits slightly
+  ) +
+  # Add p-value text label
+  geom_text(data = df_long1 %>% distinct(interval_diff, p_val, .keep_all = TRUE),
+            aes(x = max(axis_limits1$max_x, na.rm = TRUE), y = -Inf, label = paste("p =", p_val)),
+            vjust = -1, hjust = -0.1, size = 3, inherit.aes = FALSE) +
+  # Add interval difference text label
+  geom_text(data = df_long1 %>% distinct(interval_diff, .keep_all = TRUE),
+            aes(x = min(axis_limits1$min_x, na.rm = TRUE), y = -Inf, label = paste("Interval:", interval_diff)),
+            vjust = 2, hjust = -0.1, size = 3, inherit.aes = FALSE)
+
+# Display the plot
+plot1
+
+```
+
+## Maternal Age Influence on Prediction Error
+This section investigates the influence of maternal age and rank on the relative prediction error for offspring, using a Linear Mixed-Effects Model (LME).
+```{r}
+# Filter data for quality and age range
+data <- data0_3 %>%
+  filter(!(face_qual %in% c(0, 1))) %>% # Remove images with quality 0 or 1 (low quality)
+  filter(y_true <= 365) # Consider individuals younger than or equal to 1 year
+
+# Define pooling range and minimum pictures for pooling
+pooling_range <- 3 # Pooling range in days (e.g., 3-day intervals)
+n_min_pic <- 3 # Minimum number of pictures per individual per pooling range
+
+# Pool data by individual and age midpoint
+data <- pool_pic(data, pooling_range, n_min_pic)
+
+# (Optional) Outlier identification and removal (commented out)
+# The commented-out plotly code can be used to visually inspect outliers.
+# outliers <- c(114, 292, 137) # Example outlier row numbers
+# data <- data[-outliers, ] # Remove identified outliers
+
+# Import maternal data (rank and age at birth)
+# IMPORTANT: Replace this with the actual path to your Excel file.
+data_mom <- read_excel("XXX/data_mother_age.xlsx", sheet = 1)
+# Rename columns for clarity and consistency
+colnames(data_mom) <- c("id", "sex", "age", "erreur", "rang", "agemom")
+
+# Merge maternal data into the main dataset
+data <- merge(
+  data,
+  data_mom %>% select(id, rang, agemom) %>% distinct(id, .keep_all = TRUE), # Select distinct maternal info per ID
+  by = "id",
+  all.x = TRUE # Keep all rows from 'data', add NA for missing maternal info
+)
+
+# Remove rows with NA values (e.g., individuals without maternal data)
+data <- data %>%
+  drop_na()
+
+# Fit a Linear Mixed-Effects Model (LME)
+# - Fixed effects: 'rang' (maternal rank), 'agemom' (maternal age), 'sex' (offspring sex), 'scaled(mu_y_true)' (scaled offspring real age)
+# - Random effect: `~1 | id` (random intercept for each individual)
+# - Weights: `varExp(form = ~ mu_y_true)` to account for increasing heteroscedasticity (variance) with offspring age.
+model <- lme(
+  fixed = mu_error_rel ~ rang + agemom + sex + scale(mu_y_true),
+  random = ~1 | id,
+  weights = varExp(form = ~ mu_y_true),
+  data = data
+)
+
+# Display the model summary
+summary(model)
+```
+
+## Analysis of background-based shortcut learning
+```{r}
+# Calcul des erreurs de prédiction
+df <- read.csv(paste0(path1, "merge_val_0.csv"), header = TRUE, sep = ",")
+
+df <- df %>%
+  mutate(
+    pred_error = y_pred - y_true,
+    pred_no_bg_error = y_pred_no_bg - y_true,
+    error_diff = pred_error - pred_no_bg_error
+  )
+
+
+cor_result <- cor.test(df$foreground_attribution_ratio, df$fg_bg_ratio, method = "spearman")
+rho <- cor_result$estimate
+p_value <- cor_result$p.value
+
+label_text <- paste0("rho = ", round(rho, 2), ", p = ", format.pval(p_value, digits = 2))
+
+# Créer le graphique avec le texte
+plot<- ggplot(df, aes(x = foreground_attribution_ratio, y = fg_bg_ratio)) +
+  geom_point() +
+  # Ajouter le texte manuellement
+  annotate("text", x = 0.5, y = 0.95, label = label_text)
+
+ggsave(paste0(destination_folder, "attribution_background_ratio.svg"), plot, device = "svg")
+
+wilcox_test_result <- wilcox.test(df$pred_error, df$error_bg, paired = TRUE)
+print("Résultats du test de Wilcoxon (comparaison pairée des erreurs) :")
+print(wilcox_test_result)
+
+model <- lmer(error_diff ~ sex + scale(y_true) + scale(fg_bg_ratio) + (1 | id), data = df)
+summary(model)
+
+# Affichage des moyennes des erreurs
+cat("Prediction error absolute mean:", mean(abs(df$pred_error), na.rm = TRUE), "\n")
+cat("Prediction error without background absolute mean:", mean(abs(df$pred_no_bg_error), na.rm = TRUE), "\n")
+
+# Création des 'bins' d'âge
+days_in_year = 365.25
+bins = days_in_year * 0:13
+
+df <- df %>%
+  mutate(age_bin = cut(y_true, breaks = bins, include.lowest = TRUE, right = FALSE))
+
+# Agrégation des données
+agg <- df %>%
+  group_by(age_bin, sex) %>%
+  summarise(
+    error_diff_mean = mean(error_diff, na.rm = TRUE),
+    error_diff_std = sd(error_diff, na.rm = TRUE),
+    count = n(),
+    .groups = 'drop'
+  )
+
+## Boxplots
+plot2 <- ggplot(data = df, aes(x = as.factor(age_bin), y = error_diff, fill = sex)) +
+  geom_boxplot(outliers = FALSE) +
+  scale_fill_manual(values = c("f" = "#009966", "m" = "#FFCC00")) +
+  labs(
+    x = "Chronological age (year)",
+    y = "Prediction difference with and without background",
+    fill = "Sex"
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+    panel.background = element_rect(fill = "white"),
+    panel.grid.major = element_line(color = "grey"),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank()
+  )
+
+# Display the plot
+print(plot2)
+ggsave(paste0(destination_folder, "error_diff.svg"), plot2, device = "svg")
+```
+
